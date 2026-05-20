@@ -1,11 +1,20 @@
 from collections.abc import Generator
 
 from sqlalchemy import create_engine
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
 
 settings = get_settings()
+
+
+def normalized_database_url():
+    url = make_url(settings.sqlalchemy_database_url)
+    unsupported_query_keys = {"sslaccept", "sslmode", "sslrootcert"}
+    query = {key: value for key, value in url.query.items() if key.lower() not in unsupported_query_keys}
+    return url.set(query=query)
+
 
 connect_args = {}
 if settings.database_ssl:
@@ -15,7 +24,7 @@ if settings.database_ssl:
     connect_args["ssl_verify_identity"] = settings.database_ssl_verify_identity
 
 engine = create_engine(
-    settings.sqlalchemy_database_url,
+    normalized_database_url(),
     pool_pre_ping=True,
     pool_recycle=3600,
     connect_args=connect_args,

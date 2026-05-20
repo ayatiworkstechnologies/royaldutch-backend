@@ -14,7 +14,7 @@ Use these settings if creating the service manually:
 ```text
 Runtime: Python
 Root Directory: backend
-Build Command: pip install -r requirements.txt
+Build Command: python -m pip install -r requirements.txt
 Start Command: python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
 Health Check Path: /health
 ```
@@ -78,6 +78,59 @@ DATABASE_SSL_VERIFY_IDENTITY=true
 If Render cannot verify the certificate with the system bundle, upload/download the TiDB Cloud CA file and set `DATABASE_SSL_CA_PATH` to that file path.
 
 Do not use the `sys` database for the app tables. TiDB allows connecting to it, but this account cannot create application tables there.
+
+## Troubleshooting
+
+### `ModuleNotFoundError: No module named 'MySQLdb'`
+
+Render is using a plain MySQL driver URL such as:
+
+```env
+DATABASE_URL=mysql://...
+```
+
+Use this instead:
+
+```env
+DATABASE_URL=mysql+pymysql://...
+```
+
+The app also auto-normalizes `mysql://` to `mysql+pymysql://`, but Render must be redeployed with the latest code for that fallback to run.
+
+### `unexpected keyword argument 'sslaccept'`
+
+The TiDB connection string includes MySQL CLI style SSL query parameters. PyMySQL does not accept `sslaccept`.
+
+Use a clean URL:
+
+```env
+DATABASE_URL=mysql+pymysql://USER:PASSWORD@gateway01.ap-southeast-1.prod.alicloud.tidbcloud.com:4000/test
+DATABASE_SSL=true
+DATABASE_SSL_VERIFY_IDENTITY=true
+```
+
+Do not include query parameters like:
+
+```text
+?sslaccept=strict
+?sslmode=VERIFY_IDENTITY
+```
+
+The backend also removes those unsupported query keys automatically, but using a clean URL is better.
+
+### Render Uses Python 3.14
+
+This project pins Python with:
+
+- `.python-version`
+- `runtime.txt`
+- `PYTHON_VERSION=3.11.9` in `render.yaml`
+
+If Render still uses another version, set this environment variable manually in the Render dashboard:
+
+```env
+PYTHON_VERSION=3.11.9
+```
 
 Seed once after deployment if needed:
 
