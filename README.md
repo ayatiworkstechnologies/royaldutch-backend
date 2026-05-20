@@ -73,6 +73,12 @@ Start the API:
 uvicorn app.main:app --reload
 ```
 
+Render production start command:
+
+```bash
+python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
 API docs:
 
 - Swagger: `http://127.0.0.1:8000/docs`
@@ -94,6 +100,9 @@ APP_NAME=ClinicFlow API
 APP_ENV=local
 API_V1_PREFIX=/api/v1
 DATABASE_URL=mysql+pymysql://root:password@127.0.0.1:3306/clinicflow
+DATABASE_SSL=false
+DATABASE_SSL_CA_PATH=
+DATABASE_SSL_VERIFY_IDENTITY=false
 SECRET_KEY=change-this-secret-key
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
 BACKEND_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000

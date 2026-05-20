@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     app_env: str = "local"
     api_v1_prefix: str = "/api/v1"
     database_url: str = "mysql+pymysql://root:password@127.0.0.1:3306/clinicflow"
+    database_ssl: bool = False
+    database_ssl_ca_path: str = ""
+    database_ssl_verify_identity: bool = False
     secret_key: str = "change-this-secret-key"
     access_token_expire_minutes: int = 1440
     backend_cors_origins: str = ""
@@ -25,6 +28,12 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         return [origin.strip() for origin in self.backend_cors_origins.split(",") if origin.strip()]
+
+    @property
+    def sqlalchemy_database_url(self) -> str:
+        if self.database_url.startswith("mysql://"):
+            return self.database_url.replace("mysql://", "mysql+pymysql://", 1)
+        return self.database_url
 
     @property
     def smtp_login(self) -> str:
