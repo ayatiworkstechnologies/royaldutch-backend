@@ -36,6 +36,7 @@ DATABASE_SSL_VERIFY_IDENTITY=true
 SECRET_KEY=replace-with-strong-secret
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
 BACKEND_CORS_ORIGINS=https://your-frontend-domain.com,http://localhost:3000
+BACKEND_CORS_ORIGIN_REGEX=https://.*\.vercel\.app
 ```
 
 SMTP:

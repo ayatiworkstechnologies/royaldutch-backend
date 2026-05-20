@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     secret_key: str = "change-this-secret-key"
     access_token_expire_minutes: int = 1440
     backend_cors_origins: str = ""
+    backend_cors_origin_regex: str = r"https://.*\.vercel\.app"
     smtp_host: str = ""
     smtp_port: int = 465
     smtp_username: str = ""
