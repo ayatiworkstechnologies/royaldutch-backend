@@ -6,6 +6,7 @@ from app.core.cors import DynamicCORSMiddleware
 from app.db.base import Base
 from app.db.session import engine
 from app.db.session import SessionLocal
+from app.seed.clinic_data import seed_database
 from app.services.email_template_service import seed_default_email_templates
 
 settings = get_settings()
@@ -20,6 +21,7 @@ def create_app() -> FastAPI:
     def create_tables() -> None:
         Base.metadata.create_all(bind=engine)
         with SessionLocal() as db:
+            seed_database(db)
             seed_default_email_templates(db)
 
     @app.get("/health")

@@ -66,6 +66,7 @@ Render does not provide MySQL as a native managed database. Use one of these:
 - Any public MySQL server that allows Render IP connections
 
 The app creates missing tables on startup.
+On startup the app also ensures the default admin, service seed data, staff seed data, and email templates exist.
 
 For TiDB Cloud, use the SQLAlchemy URL format:
 

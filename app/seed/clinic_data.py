@@ -261,7 +261,11 @@ STAFF = [
 
 def seed_admin(db: Session) -> None:
     email = "admin@clinicflow.local"
-    if db.scalar(select(AdminUser).where(AdminUser.email == email)):
+    admin = db.scalar(select(AdminUser).where(AdminUser.email == email))
+    if admin:
+        admin.name = "ClinicFlow Admin"
+        admin.hashed_password = hash_password("Admin@12345")
+        admin.is_active = True
         return
     db.add(
         AdminUser(
