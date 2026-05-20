@@ -114,7 +114,7 @@ def update_booking_status(booking_id: int, data: BookingStatusUpdate, db: DbSess
     booking.status = data.status
     template = template_for_status(data.status)
     if template:
-        mail = create_booking_mail(booking, template)
+        mail = create_booking_mail(booking, template, db=db)
         if mail:
             db.add(mail)
     db.commit()
@@ -134,7 +134,7 @@ def queue_booking_mail(booking_id: int, template: str, db: DbSession) -> dict:
     )
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
-    mail = create_booking_mail(booking, template, MailStatus.queued)
+    mail = create_booking_mail(booking, template, MailStatus.queued, db=db)
     if not mail:
         raise HTTPException(status_code=400, detail="Patient email is missing")
     db.add(mail)

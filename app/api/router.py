@@ -1,6 +1,19 @@
 from fastapi import APIRouter
 
-from app.api.routes import auth, billing, bookings, categories, dashboard, mail, notifications, patients, payments, services, staff
+from app.api.routes import (
+    auth,
+    billing,
+    bookings,
+    categories,
+    dashboard,
+    email_templates,
+    mail,
+    notifications,
+    patients,
+    payments,
+    services,
+    staff,
+)
 
 api_router = APIRouter()
 api_router.include_router(auth.router)
@@ -12,5 +25,6 @@ api_router.include_router(patients.router)
 api_router.include_router(payments.router)
 api_router.include_router(billing.router)
 api_router.include_router(mail.router)
+api_router.include_router(email_templates.router)
 api_router.include_router(notifications.router)
 api_router.include_router(dashboard.router)

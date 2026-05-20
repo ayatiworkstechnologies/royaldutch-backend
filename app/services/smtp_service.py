@@ -12,6 +12,36 @@ def split_emails(value: str | None) -> list[str]:
     return [item.strip() for item in value.replace(";", ",").split(",") if item.strip()]
 
 
+def check_smtp_connection() -> dict:
+    settings = get_settings()
+    result = {
+        "configured": bool(settings.smtp_host and settings.smtp_login and settings.smtp_password),
+        "host": settings.smtp_host,
+        "port": settings.smtp_port,
+        "login": settings.smtp_login,
+        "from_email": settings.mail_from,
+        "use_ssl": settings.smtp_use_ssl,
+        "ok": False,
+        "error": None,
+    }
+    if not result["configured"]:
+        result["error"] = "SMTP settings are missing"
+        return result
+
+    try:
+        if settings.smtp_use_ssl:
+            with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=15) as smtp:
+                smtp.login(settings.smtp_login, settings.smtp_password)
+        else:
+            with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as smtp:
+                smtp.starttls()
+                smtp.login(settings.smtp_login, settings.smtp_password)
+        result["ok"] = True
+    except Exception as exc:
+        result["error"] = str(exc)
+    return result
+
+
 def send_mail_message(mail: MailMessage) -> MailMessage:
     settings = get_settings()
     if not settings.smtp_host or not settings.smtp_login or not settings.smtp_password:

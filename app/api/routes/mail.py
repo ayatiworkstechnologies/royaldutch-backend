@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 
 from app.api.deps import DbSession, get_current_admin
 from app.models.enums import MailStatus
 from app.models.mail import MailMessage
 from app.schemas.mail import MailMessageCreate, MailMessageRead, MailMessageUpdate
-from app.services.smtp_service import send_mail_message
+from app.services.smtp_service import check_smtp_connection, send_mail_message
 
 router = APIRouter(prefix="/mail", tags=["mail"], dependencies=[Depends(get_current_admin)])
 
@@ -22,6 +22,35 @@ def create_mail(data: MailMessageCreate, db: DbSession) -> MailMessage:
     db.commit()
     db.refresh(mail)
     return mail
+
+
+@router.get("/smtp-status")
+def smtp_status() -> dict:
+    return check_smtp_connection()
+
+
+@router.post("/send-queued")
+def send_queued_mail(
+    db: DbSession,
+    include_failed: bool = Query(default=False),
+) -> dict:
+    statuses = [MailStatus.queued]
+    if include_failed:
+        statuses.append(MailStatus.failed)
+
+    messages = db.scalars(select(MailMessage).where(MailMessage.status.in_(statuses))).all()
+    sent = 0
+    failed = 0
+    results = []
+    for mail in messages:
+        send_mail_message(mail)
+        if mail.status == MailStatus.sent:
+            sent += 1
+        elif mail.status == MailStatus.failed:
+            failed += 1
+        results.append({"id": mail.id, "status": mail.status, "error_message": mail.error_message})
+    db.commit()
+    return {"sent": sent, "failed": failed, "total": len(messages), "results": results}
 
 
 @router.patch("/{mail_id}", response_model=MailMessageRead)
@@ -45,21 +74,6 @@ def send_mail(mail_id: int, db: DbSession) -> MailMessage:
     db.commit()
     db.refresh(mail)
     return mail
-
-
-@router.post("/send-queued")
-def send_queued_mail(db: DbSession) -> dict:
-    messages = db.scalars(select(MailMessage).where(MailMessage.status == MailStatus.queued)).all()
-    sent = 0
-    failed = 0
-    for mail in messages:
-        send_mail_message(mail)
-        if mail.status == MailStatus.sent:
-            sent += 1
-        elif mail.status == MailStatus.failed:
-            failed += 1
-    db.commit()
-    return {"sent": sent, "failed": failed, "total": len(messages)}
 
 
 @router.delete("/{mail_id}")

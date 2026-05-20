@@ -5,6 +5,8 @@ from app.api.router import api_router
 from app.core.config import get_settings
 from app.db.base import Base
 from app.db.session import engine
+from app.db.session import SessionLocal
+from app.services.email_template_service import seed_default_email_templates
 
 settings = get_settings()
 
@@ -23,6 +25,8 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     def create_tables() -> None:
         Base.metadata.create_all(bind=engine)
+        with SessionLocal() as db:
+            seed_default_email_templates(db)
 
     @app.get("/health")
     def health() -> dict:

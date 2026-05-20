@@ -2,6 +2,7 @@ from app.models.admin import AdminUser
 from app.models.billing import Invoice, InvoiceItem
 from app.models.booking import Booking
 from app.models.category import Category
+from app.models.email_template import EmailTemplate
 from app.models.notification import Notification
 from app.models.mail import MailMessage
 from app.models.patient import Patient
@@ -15,6 +16,7 @@ __all__ = [
     "InvoiceItem",
     "Booking",
     "Category",
+    "EmailTemplate",
     "Notification",
     "MailMessage",
     "Patient",
