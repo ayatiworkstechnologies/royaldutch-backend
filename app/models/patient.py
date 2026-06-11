@@ -1,4 +1,4 @@
-from sqlalchemy import String
+from sqlalchemy import String, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -16,5 +16,7 @@ class Patient(TimestampMixin, Base):
     age: Mapped[int | None] = mapped_column(nullable=True)
     notes: Mapped[str | None] = mapped_column(String(1000))
     documents: Mapped[str | None] = mapped_column(String(1000))
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
 
     bookings = relationship("Booking", back_populates="patient")
+    user = relationship("User", back_populates="patient")

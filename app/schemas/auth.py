@@ -9,3 +9,4 @@ class LoginRequest(ORMModel):
 class TokenResponse(ORMModel):
     access_token: str
     token_type: str = "bearer"
+    role: str | None = None

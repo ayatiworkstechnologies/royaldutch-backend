@@ -4,327 +4,88 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
-from app.models.admin import AdminUser
 from app.models.category import Category
-from app.models.enums import RecordStatus
+from app.models.enums import RecordStatus, UserRole
 from app.models.service import Service
 from app.models.staff import Staff, StaffAvailability
+from app.models.user import User
 
 ROYAL_DUTCH_SERVICES = [
-    {
+   {
         "id": 1,
-        "category": "Eyebrows & Eyelashes",
-        "slug": "eyebrows-eyelashes",
+        "category": "Dermatology & Aesthetic Medicine",
+        "slug": "dermatology-aesthetic-medicine",
         "services": [
-            {
-                "id": 101,
-                "name": "Eyelash One By One",
-                "slug": "eyelash-one-by-one",
-                "durationMinutes": 90,
-                "price": 300,
-                "currency": "AED",
-            },
+            {"id": 1001, "name": "Medical dermatology", "slug": "medical-dermatology", "durationMinutes": 30, "price": None, "currency": "AED"},
+            {"id": 1002, "name": "Cosmetic injectables", "slug": "cosmetic-injectables", "durationMinutes": 45, "price": None, "currency": "AED"},
+            {"id": 1003, "name": "Laser and device based treatments", "slug": "laser-device-based-treatments", "durationMinutes": 45, "price": None, "currency": "AED"},
+            {"id": 1004, "name": "Anti-aging and preventive skin programs", "slug": "anti-aging-preventive-skin-programs", "durationMinutes": 45, "price": None, "currency": "AED"},
         ],
     },
     {
         "id": 2,
-        "category": "Permanent Make-Up (PMU)",
-        "slug": "permanent-make-up-pmu",
+        "category": "Dentistry Department",
+        "slug": "dentistry-department",
         "services": [
-            {
-                "id": 201,
-                "name": "Microblading Eyebrows",
-                "slug": "microblading-eyebrows",
-                "durationMinutes": None,
-                "price": 650,
-                "currency": "AED",
-            },
-            {
-                "id": 202,
-                "name": "Scalp Micropigmentation",
-                "slug": "scalp-micropigmentation",
-                "durationMinutes": None,
-                "price": None,
-                "currency": "AED",
-            },
-            {
-                "id": 203,
-                "name": "Scar Coverup",
-                "slug": "scar-coverup",
-                "durationMinutes": None,
-                "price": None,
-                "currency": "AED",
-            },
+            {"id": 1101, "name": "Preventive and general dentistry", "slug": "preventive-general-dentistry", "durationMinutes": 30, "price": None, "currency": "AED"},
+            {"id": 1102, "name": "Cosmetic smile design and rehabilitation", "slug": "cosmetic-smile-design-rehabilitation", "durationMinutes": 60, "price": None, "currency": "AED"},
+            {"id": 1103, "name": "Restorative dentistry", "slug": "restorative-dentistry", "durationMinutes": 45, "price": None, "currency": "AED"},
+            {"id": 1104, "name": "Pediatric dentistry", "slug": "pediatric-dentistry", "durationMinutes": 30, "price": None, "currency": "AED"},
         ],
     },
     {
         "id": 3,
-        "category": "Candela Laser",
-        "slug": "candela-laser",
+        "category": "General Medicine (GP Services)",
+        "slug": "general-medicine",
         "services": [
-            {
-                "id": 301,
-                "name": "Laser Hair Removal",
-                "slug": "laser-hair-removal",
-                "durationMinutes": None,
-                "price": None,
-                "currency": "AED",
-            },
-            {
-                "id": 302,
-                "name": "Laser Rejuvenation",
-                "slug": "laser-rejuvenation",
-                "durationMinutes": None,
-                "price": None,
-                "currency": "AED",
-            },
+            {"id": 1201, "name": "Diagnosis and treatment of acute conditions", "slug": "diagnosis-treatment-acute-conditions", "durationMinutes": 30, "price": None, "currency": "AED"},
+            {"id": 1202, "name": "Chronic disease management", "slug": "chronic-disease-management", "durationMinutes": 30, "price": None, "currency": "AED"},
+            {"id": 1203, "name": "Preventive health screenings and check-ups", "slug": "preventive-health-screenings-checkups", "durationMinutes": 45, "price": None, "currency": "AED"},
+            {"id": 1204, "name": "Family medicine and wellness care", "slug": "family-medicine-wellness-care", "durationMinutes": 30, "price": None, "currency": "AED"},
         ],
     },
     {
         "id": 4,
-        "category": "Men Price",
-        "slug": "men-price",
+        "category": "Physiotherapy & Rehabilitation",
+        "slug": "physiotherapy-rehabilitation",
         "services": [
-            {
-                "id": 401,
-                "name": "Men Laser Treatment",
-                "slug": "men-laser-treatment",
-                "durationMinutes": None,
-                "price": None,
-                "currency": "AED",
-            },
-            {
-                "id": 402,
-                "name": "Men Facial Treatment",
-                "slug": "men-facial-treatment",
-                "durationMinutes": None,
-                "price": None,
-                "currency": "AED",
-            },
+            {"id": 1301, "name": "Musculoskeletal and pain management therapy", "slug": "musculoskeletal-pain-management", "durationMinutes": 45, "price": None, "currency": "AED"},
+            {"id": 1302, "name": "Post-injury and post-operative rehabilitation", "slug": "post-injury-post-operative-rehabilitation", "durationMinutes": 45, "price": None, "currency": "AED"},
+            {"id": 1303, "name": "Neurological physiotherapy", "slug": "neurological-physiotherapy", "durationMinutes": 45, "price": None, "currency": "AED"},
+            {"id": 1304, "name": "Home-based physiotherapy programs", "slug": "home-based-physiotherapy-programs", "durationMinutes": 45, "price": None, "currency": "AED"},
         ],
     },
     {
         "id": 5,
-        "category": "Fat Freezing Treatment",
-        "slug": "fat-freezing-treatment",
+        "category": "Home Healthcare Division",
+        "slug": "home-healthcare-division",
         "services": [
-            {
-                "id": 501,
-                "name": "Cryolipolysis Fat Freezing",
-                "slug": "cryolipolysis-fat-freezing",
-                "durationMinutes": None,
-                "price": None,
-                "currency": "AED",
-            },
-            {
-                "id": 502,
-                "name": "Body Contouring & Slimming",
-                "slug": "body-contouring-slimming",
-                "durationMinutes": None,
-                "price": None,
-                "currency": "AED",
-            },
+            {"id": 1401, "name": "Doctor home consultations", "slug": "doctor-home-consultations", "durationMinutes": 45, "price": None, "currency": "AED"},
+            {"id": 1402, "name": "Skilled nursing care", "slug": "skilled-nursing-care", "durationMinutes": 60, "price": None, "currency": "AED"},
+            {"id": 1403, "name": "Elderly and assisted care services", "slug": "elderly-assisted-care-services", "durationMinutes": 60, "price": None, "currency": "AED"},
+            {"id": 1404, "name": "Chronic condition monitoring", "slug": "chronic-condition-monitoring", "durationMinutes": 45, "price": None, "currency": "AED"},
         ],
     },
     {
         "id": 6,
-        "category": "Facials",
-        "slug": "facials",
+        "category": "Post-Surgical Care Programs",
+        "slug": "post-surgical-care-programs",
         "services": [
-            {
-                "id": 601,
-                "name": "Facials Hydrafacial",
-                "slug": "facials-hydrafacial",
-                "durationMinutes": None,
-                "price": None,
-                "currency": "AED",
-            },
-            {
-                "id": 602,
-                "name": "Facials Luxe",
-                "slug": "facials-luxe",
-                "durationMinutes": None,
-                "price": None,
-                "currency": "AED",
-            },
-            {
-                "id": 603,
-                "name": "General Facial",
-                "slug": "general-facial",
-                "durationMinutes": None,
-                "price": None,
-                "currency": "AED",
-            },
-            {
-                "id": 604,
-                "name": "Acne Facial",
-                "slug": "acne-facial",
-                "durationMinutes": None,
-                "price": None,
-                "currency": "AED",
-            },
-            {
-                "id": 605,
-                "name": "BB Glow Facial",
-                "slug": "bb-glow-facial",
-                "durationMinutes": None,
-                "price": None,
-                "currency": "AED",
-            },
-            {
-                "id": 606,
-                "name": "Chemical Peeling",
-                "slug": "chemical-peeling",
-                "durationMinutes": None,
-                "price": None,
-                "currency": "AED",
-            },
+            {"id": 1501, "name": "Wound care and infection prevention", "slug": "wound-care-infection-prevention", "durationMinutes": 45, "price": None, "currency": "AED"},
+            {"id": 1502, "name": "Pain management protocols", "slug": "pain-management-protocols", "durationMinutes": 30, "price": None, "currency": "AED"},
+            {"id": 1503, "name": "Rehabilitation and mobility restoration", "slug": "rehabilitation-mobility-restoration", "durationMinutes": 45, "price": None, "currency": "AED"},
+            {"id": 1504, "name": "Long-term recovery and follow-up care", "slug": "long-term-recovery-follow-up-care", "durationMinutes": 45, "price": None, "currency": "AED"},
         ],
     },
     {
         "id": 7,
-        "category": "Lightenings Treatments",
-        "slug": "lightenings-treatments",
-        "services": [
-            {
-                "id": 701,
-                "name": "Skin Lightening",
-                "slug": "skin-lightening",
-                "durationMinutes": None,
-                "price": None,
-                "currency": "AED",
-            },
-            {
-                "id": 702,
-                "name": "Mesotherapy",
-                "slug": "mesotherapy",
-                "durationMinutes": None,
-                "price": None,
-                "currency": "AED",
-            },
-            {
-                "id": 703,
-                "name": "Dermapen Microneedling",
-                "slug": "dermapen-microneedling",
-                "durationMinutes": None,
-                "price": None,
-                "currency": "AED",
-            },
-        ],
-    },
-    {
-        "id": 8,
-        "category": "Piercing",
-        "slug": "piercing",
-        "services": [
-            {
-                "id": 801,
-                "name": "Piercing",
-                "slug": "piercing",
-                "durationMinutes": None,
-                "price": None,
-                "currency": "AED",
-            },
-        ],
-    },
-    {
-        "id": 9,
-        "category": "Packages",
-        "slug": "packages",
-        "services": [
-            {
-                "id": 901,
-                "name": "Paid Package Old Owner",
-                "slug": "paid-package-old-owner",
-                "durationMinutes": None,
-                "price": 0,
-                "currency": "AED",
-            },
-            {
-                "id": 902,
-                "name": "Package Price Do 3 And Get 1 Free",
-                "slug": "package-price-do-3-and-get-1-free",
-                "durationMinutes": None,
-                "price": 1300,
-                "currency": "AED",
-            },
-        ],
-    },
-    {
-        "id": 10,
-        "category": "Dermatology & Aesthetic Medicine",
-        "slug": "dermatology-aesthetic-medicine",
-        "services": [
-            {"id": 1001, "name": "Medical Dermatology", "slug": "medical-dermatology", "durationMinutes": 30, "price": None, "currency": "AED"},
-            {"id": 1002, "name": "Cosmetic Injectables", "slug": "cosmetic-injectables", "durationMinutes": 45, "price": None, "currency": "AED"},
-            {"id": 1003, "name": "Laser and Device Based Treatments", "slug": "laser-device-based-treatments", "durationMinutes": 45, "price": None, "currency": "AED"},
-            {"id": 1004, "name": "Anti-Aging and Preventive Skin Programs", "slug": "anti-aging-preventive-skin-programs", "durationMinutes": 45, "price": None, "currency": "AED"},
-        ],
-    },
-    {
-        "id": 11,
-        "category": "Dentistry Department",
-        "slug": "dentistry-department",
-        "services": [
-            {"id": 1101, "name": "Preventive and General Dentistry", "slug": "preventive-general-dentistry", "durationMinutes": 30, "price": None, "currency": "AED"},
-            {"id": 1102, "name": "Cosmetic Smile Design and Rehabilitation", "slug": "cosmetic-smile-design-rehabilitation", "durationMinutes": 60, "price": None, "currency": "AED"},
-            {"id": 1103, "name": "Restorative Dentistry", "slug": "restorative-dentistry", "durationMinutes": 45, "price": None, "currency": "AED"},
-            {"id": 1104, "name": "Pediatric Dentistry", "slug": "pediatric-dentistry", "durationMinutes": 30, "price": None, "currency": "AED"},
-        ],
-    },
-    {
-        "id": 12,
-        "category": "General Medicine (GP Services)",
-        "slug": "general-medicine",
-        "services": [
-            {"id": 1201, "name": "Diagnosis and Treatment of Acute Conditions", "slug": "diagnosis-treatment-acute-conditions", "durationMinutes": 30, "price": None, "currency": "AED"},
-            {"id": 1202, "name": "Chronic Disease Management", "slug": "chronic-disease-management", "durationMinutes": 30, "price": None, "currency": "AED"},
-            {"id": 1203, "name": "Preventive Health Screenings and Check-Ups", "slug": "preventive-health-screenings-checkups", "durationMinutes": 45, "price": None, "currency": "AED"},
-            {"id": 1204, "name": "Family Medicine and Wellness Care", "slug": "family-medicine-wellness-care", "durationMinutes": 30, "price": None, "currency": "AED"},
-        ],
-    },
-    {
-        "id": 13,
-        "category": "Physiotherapy & Rehabilitation",
-        "slug": "physiotherapy-rehabilitation",
-        "services": [
-            {"id": 1301, "name": "Musculoskeletal and Pain Management Therapy", "slug": "musculoskeletal-pain-management", "durationMinutes": 45, "price": None, "currency": "AED"},
-            {"id": 1302, "name": "Post-Injury and Post-Operative Rehabilitation", "slug": "post-injury-post-operative-rehabilitation", "durationMinutes": 45, "price": None, "currency": "AED"},
-            {"id": 1303, "name": "Neurological Physiotherapy", "slug": "neurological-physiotherapy", "durationMinutes": 45, "price": None, "currency": "AED"},
-            {"id": 1304, "name": "Home-Based Physiotherapy Programs", "slug": "home-based-physiotherapy-programs", "durationMinutes": 45, "price": None, "currency": "AED"},
-        ],
-    },
-    {
-        "id": 14,
-        "category": "Home Healthcare Division",
-        "slug": "home-healthcare-division",
-        "services": [
-            {"id": 1401, "name": "Doctor Home Consultations", "slug": "doctor-home-consultations", "durationMinutes": 45, "price": None, "currency": "AED"},
-            {"id": 1402, "name": "Skilled Nursing Care", "slug": "skilled-nursing-care", "durationMinutes": 60, "price": None, "currency": "AED"},
-            {"id": 1403, "name": "Elderly and Assisted Care Services", "slug": "elderly-assisted-care-services", "durationMinutes": 60, "price": None, "currency": "AED"},
-            {"id": 1404, "name": "Chronic Condition Monitoring", "slug": "chronic-condition-monitoring", "durationMinutes": 45, "price": None, "currency": "AED"},
-        ],
-    },
-    {
-        "id": 15,
-        "category": "Post-Surgical Care Programs",
-        "slug": "post-surgical-care-programs",
-        "services": [
-            {"id": 1501, "name": "Wound Care and Infection Prevention", "slug": "wound-care-infection-prevention", "durationMinutes": 45, "price": None, "currency": "AED"},
-            {"id": 1502, "name": "Pain Management Protocols", "slug": "pain-management-protocols", "durationMinutes": 30, "price": None, "currency": "AED"},
-            {"id": 1503, "name": "Rehabilitation and Mobility Restoration", "slug": "rehabilitation-mobility-restoration", "durationMinutes": 45, "price": None, "currency": "AED"},
-            {"id": 1504, "name": "Long-Term Recovery and Follow-Up Care", "slug": "long-term-recovery-follow-up-care", "durationMinutes": 45, "price": None, "currency": "AED"},
-        ],
-    },
-    {
-        "id": 16,
         "category": "Integrated Care Model",
         "slug": "integrated-care-model",
         "services": [
-            {"id": 1601, "name": "Care Coordination Between Departments", "slug": "care-coordination-between-departments", "durationMinutes": 30, "price": None, "currency": "AED"},
-            {"id": 1602, "name": "Continuity of Care From Consultation to Recovery", "slug": "continuity-of-care", "durationMinutes": 30, "price": None, "currency": "AED"},
-            {"id": 1603, "name": "Personalized Treatment Pathways", "slug": "personalized-treatment-pathways", "durationMinutes": 30, "price": None, "currency": "AED"},
-            {"id": 1604, "name": "Clinical Outcomes and Patient Satisfaction Review", "slug": "clinical-outcomes-patient-satisfaction", "durationMinutes": 30, "price": None, "currency": "AED"},
+            {"id": 1601, "name": "Seamless coordination between departments", "slug": "seamless-coordination-between-departments", "durationMinutes": 30, "price": None, "currency": "AED"},
+            {"id": 1602, "name": "Continuity of care from consultation to recovery", "slug": "continuity-of-care", "durationMinutes": 30, "price": None, "currency": "AED"},
+            {"id": 1603, "name": "Personalized treatment pathways", "slug": "personalized-treatment-pathways", "durationMinutes": 30, "price": None, "currency": "AED"},
+            {"id": 1604, "name": "Improved clinical outcomes and patient satisfaction", "slug": "improved-clinical-outcomes", "durationMinutes": 30, "price": None, "currency": "AED"},
         ],
     },
 ]
@@ -342,18 +103,20 @@ STAFF = [
 
 def seed_admin(db: Session) -> None:
     email = "admin@royaldutch.ae"
-    admin = db.scalar(select(AdminUser).where(AdminUser.email == email))
+    admin = db.scalar(select(User).where(User.email == email))
     if admin:
         admin.name = "Royal Dutch Admin"
         admin.email = email
         admin.hashed_password = hash_password("Admin@12345")
+        admin.role = UserRole.admin
         admin.is_active = True
         return
     db.add(
-        AdminUser(
+        User(
             name="Royal Dutch Admin",
             email=email,
             hashed_password=hash_password("Admin@12345"),
+            role=UserRole.admin,
         )
     )
 
@@ -393,7 +156,11 @@ def seed_categories_and_services(db: Session) -> list[Service]:
             category.status = RecordStatus.active
 
         for service_data in category_data["services"]:
-            service = db.scalar(select(Service).where(Service.slug == service_data["slug"]))
+            service = db.scalar(
+                select(Service).where(
+                    (Service.slug == service_data["slug"]) | (Service.external_id == service_data["id"])
+                )
+            )
             if not service:
                 service = Service(
                     external_id=service_data["id"],
@@ -412,6 +179,7 @@ def seed_categories_and_services(db: Session) -> list[Service]:
                 service.external_id = service_data["id"]
                 service.category_id = category.id
                 service.name = service_data["name"]
+                service.slug = service_data["slug"]
                 service.duration_minutes = service_data["durationMinutes"]
                 service.price = service_data["price"]
                 service.currency = service_data["currency"]
@@ -422,71 +190,19 @@ def seed_categories_and_services(db: Session) -> list[Service]:
 
 def seed_staff(db: Session, services: list[Service]) -> None:
     all_services = {service.slug: service for service in services}
-    assignments = {
-        "Dr. Aisha": [
-            "microblading-eyebrows",
-            "scalp-micropigmentation",
-            "scar-coverup",
-            "chemical-peeling",
-            "skin-lightening",
-            "mesotherapy",
-            "dermapen-microneedling",
-            "medical-dermatology",
-            "laser-device-based-treatments",
-        ],
-        "Dr. Sana": [
-            "laser-hair-removal",
-            "laser-rejuvenation",
-            "men-laser-treatment",
-            "cryolipolysis-fat-freezing",
-            "body-contouring-slimming",
-        ],
-        "Dr. Farah": [
-            "eyelash-one-by-one",
-            "men-facial-treatment",
-            "facials-hydrafacial",
-            "facials-luxe",
-            "general-facial",
-            "acne-facial",
-            "bb-glow-facial",
-            "piercing",
-            "paid-package-old-owner",
-            "package-price-do-3-and-get-1-free",
-            "cosmetic-injectables",
-            "anti-aging-preventive-skin-programs",
-        ],
-        "Dr. Omar": [
-            "diagnosis-treatment-acute-conditions",
-            "chronic-disease-management",
-            "preventive-health-screenings-checkups",
-            "family-medicine-wellness-care",
-            "doctor-home-consultations",
-            "continuity-of-care",
-            "personalized-treatment-pathways",
-            "clinical-outcomes-patient-satisfaction",
-        ],
-        "Dr. Leena": [
-            "preventive-general-dentistry",
-            "cosmetic-smile-design-rehabilitation",
-            "restorative-dentistry",
-            "pediatric-dentistry",
-        ],
-        "Dr. Kareem": [
-            "musculoskeletal-pain-management",
-            "post-injury-post-operative-rehabilitation",
-            "neurological-physiotherapy",
-            "home-based-physiotherapy-programs",
-            "rehabilitation-mobility-restoration",
-        ],
-        "Nurse Maryam": [
-            "skilled-nursing-care",
-            "elderly-assisted-care-services",
-            "chronic-condition-monitoring",
-            "wound-care-infection-prevention",
-            "pain-management-protocols",
-            "long-term-recovery-follow-up-care",
-            "care-coordination-between-departments",
-        ],
+    role_category_mapping = {
+        "Dermatologist": ["dermatology-aesthetic-medicine"],
+        "Laser Specialist": ["dermatology-aesthetic-medicine"],
+        "Facial Therapist": ["dermatology-aesthetic-medicine"],
+        "General Practitioner": ["general-medicine", "integrated-care-model"],
+        "Dentist": ["dentistry-department"],
+        "Physiotherapist": ["physiotherapy-rehabilitation"],
+        "Home Healthcare Coordinator": ["home-healthcare-division", "post-surgical-care-programs", "integrated-care-model"],
+    }
+
+    category_to_service_slugs = {
+        cat["slug"]: [svc["slug"] for svc in cat["services"]]
+        for cat in ROYAL_DUTCH_SERVICES
     }
     for name, role, specialization in STAFF:
         staff = db.scalar(select(Staff).where(Staff.name == name))
@@ -501,7 +217,11 @@ def seed_staff(db: Session, services: list[Service]) -> None:
             db.add(staff)
             db.flush()
 
-        staff.services = [all_services[slug] for slug in assignments[name] if slug in all_services]
+        assigned_slugs = []
+        for cat_slug in role_category_mapping.get(role, []):
+            assigned_slugs.extend(category_to_service_slugs.get(cat_slug, []))
+            
+        staff.services = [all_services[slug] for slug in assigned_slugs if slug in all_services]
         if not staff.availability:
             staff.availability = [
                 StaffAvailability(

@@ -5,11 +5,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.booking import Booking
-from app.models.enums import BookingStatus, RecordStatus
+from app.models.enums import BookingStatus, RecordStatus, UserRole
 from app.models.notification import Notification
 from app.models.patient import Patient
 from app.models.service import Service
 from app.models.staff import Staff, StaffAvailability
+from app.models.user import User
 from app.schemas.booking import BookingCreate, BookingUpdate
 from app.services.mail_service import create_booking_mail
 
@@ -79,17 +80,29 @@ def make_booking_code(db: Session, booking_date: date) -> str:
     next_number = (max(numbers) if numbers else 0) + 1
     return f"{prefix}{next_number:04d}"
 
-
 def get_or_create_patient(db: Session, data) -> Patient:
     patient = db.scalar(select(Patient).where(Patient.phone == data.phone))
     if patient:
         for field, value in data.model_dump(exclude_unset=True).items():
             setattr(patient, field, value)
-        return patient
+    else:
+        patient = Patient(**data.model_dump())
+        db.add(patient)
+        db.flush()
 
-    patient = Patient(**data.model_dump())
-    db.add(patient)
-    db.flush()
+    if patient.email and not patient.user_id:
+        user = db.scalar(select(User).where(User.email == patient.email))
+        if not user:
+            user = User(
+                name=patient.full_name,
+                email=patient.email,
+                role=UserRole.customer,
+                hashed_password=None,
+            )
+            db.add(user)
+            db.flush()
+        patient.user_id = user.id
+
     return patient
 
 

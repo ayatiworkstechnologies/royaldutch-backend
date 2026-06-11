@@ -3,7 +3,7 @@ from sqlalchemy import select
 
 from app.api.deps import DbSession, get_current_admin
 from app.models.patient import Patient
-from app.schemas.patient import PatientRead, PatientUpdate
+from app.schemas.patient import PatientCreate, PatientRead, PatientUpdate
 
 router = APIRouter(prefix="/patients", tags=["patients"], dependencies=[Depends(get_current_admin)])
 
@@ -14,6 +14,18 @@ def list_patients(db: DbSession, phone: str | None = Query(default=None)) -> lis
     if phone:
         query = query.where(Patient.phone == phone)
     return list(db.scalars(query).all())
+
+
+@router.post("", response_model=PatientRead)
+def create_patient(data: PatientCreate, db: DbSession) -> Patient:
+    existing = db.scalar(select(Patient).where(Patient.phone == data.phone))
+    if existing:
+        raise HTTPException(status_code=400, detail="Patient with this phone number already exists")
+    patient = Patient(**data.model_dump())
+    db.add(patient)
+    db.commit()
+    db.refresh(patient)
+    return patient
 
 
 @router.patch("/{patient_id}", response_model=PatientRead)

@@ -1,6 +1,11 @@
 from enum import StrEnum
 
 
+class UserRole(StrEnum):
+    admin = "admin"
+    customer = "customer"
+
+
 class RecordStatus(StrEnum):
     active = "active"
     inactive = "inactive"
