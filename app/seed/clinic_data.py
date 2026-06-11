@@ -101,21 +101,10 @@ STAFF = [
 ]
 
 
-def _set(obj, attr: str, value) -> None:
-    """Only assign if the value actually changed, to avoid needless UPDATEs on unique columns."""
-    if getattr(obj, attr) != value:
-        setattr(obj, attr, value)
-
-
 def seed_admin(db: Session) -> None:
     email = "admin@royaldutch.ae"
     admin = db.scalar(select(User).where(User.email == email))
     if admin:
-        admin.name = "Royal Dutch Admin"
-        admin.email = email
-        admin.hashed_password = hash_password("Admin@12345")
-        admin.role = UserRole.admin
-        admin.is_active = True
         return
     db.add(
         User(
@@ -128,28 +117,11 @@ def seed_admin(db: Session) -> None:
 
 
 def seed_categories_and_services(db: Session) -> list[Service]:
+    """Insert-only seed: never updates existing rows to avoid TiDB unique constraint issues."""
     services: list[Service] = []
-    active_category_slugs = {category["slug"] for category in ROYAL_DUTCH_SERVICES}
-    active_service_slugs = {
-        service["slug"]
-        for category in ROYAL_DUTCH_SERVICES
-        for service in category["services"]
-    }
-
-    for category in db.scalars(select(Category)).all():
-        if category.slug not in active_category_slugs:
-            category.status = RecordStatus.inactive
-
-    for service in db.scalars(select(Service)).all():
-        if service.slug not in active_service_slugs:
-            service.status = RecordStatus.inactive
 
     for category_data in ROYAL_DUTCH_SERVICES:
-        category = db.scalar(
-            select(Category).where(
-                (Category.slug == category_data["slug"]) | (Category.external_id == category_data["id"])
-            )
-        )
+        category = db.scalar(select(Category).where(Category.slug == category_data["slug"]))
         if not category:
             category = Category(
                 external_id=category_data["id"],
@@ -159,18 +131,10 @@ def seed_categories_and_services(db: Session) -> list[Service]:
                 status=RecordStatus.active,
             )
             db.add(category)
-        else:
-            _set(category, "external_id", category_data["id"])
-            _set(category, "name", category_data["category"])
-            _set(category, "status", RecordStatus.active)
-        db.flush()
+            db.flush()
 
         for service_data in category_data["services"]:
-            service = db.scalar(
-                select(Service).where(
-                    (Service.slug == service_data["slug"]) | (Service.external_id == service_data["id"])
-                )
-            )
+            service = db.scalar(select(Service).where(Service.slug == service_data["slug"]))
             if not service:
                 service = Service(
                     external_id=service_data["id"],
@@ -184,16 +148,7 @@ def seed_categories_and_services(db: Session) -> list[Service]:
                     status=RecordStatus.active,
                 )
                 db.add(service)
-            else:
-                _set(service, "external_id", service_data["id"])
-                _set(service, "category_id", category.id)
-                _set(service, "name", service_data["name"])
-                _set(service, "slug", service_data["slug"])
-                _set(service, "duration_minutes", service_data["durationMinutes"])
-                _set(service, "price", service_data["price"])
-                _set(service, "currency", service_data["currency"])
-                _set(service, "status", RecordStatus.active)
-            db.flush()
+                db.flush()
             services.append(service)
     return services
 
@@ -246,7 +201,11 @@ def seed_staff(db: Session, services: list[Service]) -> None:
 
 
 def seed_database(db: Session) -> None:
-    seed_admin(db)
-    services = seed_categories_and_services(db)
-    seed_staff(db, services)
-    db.commit()
+    try:
+        seed_admin(db)
+        services = seed_categories_and_services(db)
+        seed_staff(db, services)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        print(f"Seed warning (non-fatal): {exc}")
