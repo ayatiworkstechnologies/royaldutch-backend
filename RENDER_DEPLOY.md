@@ -71,7 +71,7 @@ On startup the app also ensures the default admin, service seed data, staff seed
 For TiDB Cloud, use the SQLAlchemy URL format:
 
 ```env
-DATABASE_URL=mysql+pymysql://USER:PASSWORD@gateway01.ap-southeast-1.prod.alicloud.tidbcloud.com:4000/test
+DATABASE_URL=mysql+pymysql://USER:PASSWORD@gateway01.ap-southeast-1.prod.alicloud.tidbcloud.com:4000/royaldutch
 DATABASE_SSL=true
 DATABASE_SSL_CA_PATH=/etc/ssl/certs/ca-certificates.crt
 DATABASE_SSL_VERIFY_IDENTITY=true
@@ -106,7 +106,7 @@ The TiDB connection string includes MySQL CLI style SSL query parameters. PyMySQ
 Use a clean URL:
 
 ```env
-DATABASE_URL=mysql+pymysql://USER:PASSWORD@gateway01.ap-southeast-1.prod.alicloud.tidbcloud.com:4000/test
+DATABASE_URL=mysql+pymysql://USER:PASSWORD@gateway01.ap-southeast-1.prod.alicloud.tidbcloud.com:4000/royaldutch
 DATABASE_SSL=true
 DATABASE_SSL_VERIFY_IDENTITY=true
 ```

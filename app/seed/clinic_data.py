@@ -250,26 +250,108 @@ ROYAL_DUTCH_SERVICES = [
             },
         ],
     },
+    {
+        "id": 10,
+        "category": "Dermatology & Aesthetic Medicine",
+        "slug": "dermatology-aesthetic-medicine",
+        "services": [
+            {"id": 1001, "name": "Medical Dermatology", "slug": "medical-dermatology", "durationMinutes": 30, "price": None, "currency": "AED"},
+            {"id": 1002, "name": "Cosmetic Injectables", "slug": "cosmetic-injectables", "durationMinutes": 45, "price": None, "currency": "AED"},
+            {"id": 1003, "name": "Laser and Device Based Treatments", "slug": "laser-device-based-treatments", "durationMinutes": 45, "price": None, "currency": "AED"},
+            {"id": 1004, "name": "Anti-Aging and Preventive Skin Programs", "slug": "anti-aging-preventive-skin-programs", "durationMinutes": 45, "price": None, "currency": "AED"},
+        ],
+    },
+    {
+        "id": 11,
+        "category": "Dentistry Department",
+        "slug": "dentistry-department",
+        "services": [
+            {"id": 1101, "name": "Preventive and General Dentistry", "slug": "preventive-general-dentistry", "durationMinutes": 30, "price": None, "currency": "AED"},
+            {"id": 1102, "name": "Cosmetic Smile Design and Rehabilitation", "slug": "cosmetic-smile-design-rehabilitation", "durationMinutes": 60, "price": None, "currency": "AED"},
+            {"id": 1103, "name": "Restorative Dentistry", "slug": "restorative-dentistry", "durationMinutes": 45, "price": None, "currency": "AED"},
+            {"id": 1104, "name": "Pediatric Dentistry", "slug": "pediatric-dentistry", "durationMinutes": 30, "price": None, "currency": "AED"},
+        ],
+    },
+    {
+        "id": 12,
+        "category": "General Medicine (GP Services)",
+        "slug": "general-medicine",
+        "services": [
+            {"id": 1201, "name": "Diagnosis and Treatment of Acute Conditions", "slug": "diagnosis-treatment-acute-conditions", "durationMinutes": 30, "price": None, "currency": "AED"},
+            {"id": 1202, "name": "Chronic Disease Management", "slug": "chronic-disease-management", "durationMinutes": 30, "price": None, "currency": "AED"},
+            {"id": 1203, "name": "Preventive Health Screenings and Check-Ups", "slug": "preventive-health-screenings-checkups", "durationMinutes": 45, "price": None, "currency": "AED"},
+            {"id": 1204, "name": "Family Medicine and Wellness Care", "slug": "family-medicine-wellness-care", "durationMinutes": 30, "price": None, "currency": "AED"},
+        ],
+    },
+    {
+        "id": 13,
+        "category": "Physiotherapy & Rehabilitation",
+        "slug": "physiotherapy-rehabilitation",
+        "services": [
+            {"id": 1301, "name": "Musculoskeletal and Pain Management Therapy", "slug": "musculoskeletal-pain-management", "durationMinutes": 45, "price": None, "currency": "AED"},
+            {"id": 1302, "name": "Post-Injury and Post-Operative Rehabilitation", "slug": "post-injury-post-operative-rehabilitation", "durationMinutes": 45, "price": None, "currency": "AED"},
+            {"id": 1303, "name": "Neurological Physiotherapy", "slug": "neurological-physiotherapy", "durationMinutes": 45, "price": None, "currency": "AED"},
+            {"id": 1304, "name": "Home-Based Physiotherapy Programs", "slug": "home-based-physiotherapy-programs", "durationMinutes": 45, "price": None, "currency": "AED"},
+        ],
+    },
+    {
+        "id": 14,
+        "category": "Home Healthcare Division",
+        "slug": "home-healthcare-division",
+        "services": [
+            {"id": 1401, "name": "Doctor Home Consultations", "slug": "doctor-home-consultations", "durationMinutes": 45, "price": None, "currency": "AED"},
+            {"id": 1402, "name": "Skilled Nursing Care", "slug": "skilled-nursing-care", "durationMinutes": 60, "price": None, "currency": "AED"},
+            {"id": 1403, "name": "Elderly and Assisted Care Services", "slug": "elderly-assisted-care-services", "durationMinutes": 60, "price": None, "currency": "AED"},
+            {"id": 1404, "name": "Chronic Condition Monitoring", "slug": "chronic-condition-monitoring", "durationMinutes": 45, "price": None, "currency": "AED"},
+        ],
+    },
+    {
+        "id": 15,
+        "category": "Post-Surgical Care Programs",
+        "slug": "post-surgical-care-programs",
+        "services": [
+            {"id": 1501, "name": "Wound Care and Infection Prevention", "slug": "wound-care-infection-prevention", "durationMinutes": 45, "price": None, "currency": "AED"},
+            {"id": 1502, "name": "Pain Management Protocols", "slug": "pain-management-protocols", "durationMinutes": 30, "price": None, "currency": "AED"},
+            {"id": 1503, "name": "Rehabilitation and Mobility Restoration", "slug": "rehabilitation-mobility-restoration", "durationMinutes": 45, "price": None, "currency": "AED"},
+            {"id": 1504, "name": "Long-Term Recovery and Follow-Up Care", "slug": "long-term-recovery-follow-up-care", "durationMinutes": 45, "price": None, "currency": "AED"},
+        ],
+    },
+    {
+        "id": 16,
+        "category": "Integrated Care Model",
+        "slug": "integrated-care-model",
+        "services": [
+            {"id": 1601, "name": "Care Coordination Between Departments", "slug": "care-coordination-between-departments", "durationMinutes": 30, "price": None, "currency": "AED"},
+            {"id": 1602, "name": "Continuity of Care From Consultation to Recovery", "slug": "continuity-of-care", "durationMinutes": 30, "price": None, "currency": "AED"},
+            {"id": 1603, "name": "Personalized Treatment Pathways", "slug": "personalized-treatment-pathways", "durationMinutes": 30, "price": None, "currency": "AED"},
+            {"id": 1604, "name": "Clinical Outcomes and Patient Satisfaction Review", "slug": "clinical-outcomes-patient-satisfaction", "durationMinutes": 30, "price": None, "currency": "AED"},
+        ],
+    },
 ]
 
 STAFF = [
     ("Dr. Aisha", "Dermatologist", "PMU, skin treatments and consultation"),
     ("Dr. Sana", "Laser Specialist", "Candela laser and slimming treatments"),
     ("Dr. Farah", "Facial Therapist", "Facials, eyelashes and lightening treatments"),
+    ("Dr. Omar", "General Practitioner", "General medicine, wellness care and home consultations"),
+    ("Dr. Leena", "Dentist", "General dentistry, smile design and pediatric dentistry"),
+    ("Dr. Kareem", "Physiotherapist", "Rehabilitation, mobility recovery and pain management"),
+    ("Nurse Maryam", "Home Healthcare Coordinator", "Nursing care, elderly support and post-surgical follow-up"),
 ]
 
 
 def seed_admin(db: Session) -> None:
-    email = "admin@clinicflow.local"
+    email = "admin@royaldutch.ae"
     admin = db.scalar(select(AdminUser).where(AdminUser.email == email))
     if admin:
-        admin.name = "ClinicFlow Admin"
+        admin.name = "Royal Dutch Admin"
+        admin.email = email
         admin.hashed_password = hash_password("Admin@12345")
         admin.is_active = True
         return
     db.add(
         AdminUser(
-            name="ClinicFlow Admin",
+            name="Royal Dutch Admin",
             email=email,
             hashed_password=hash_password("Admin@12345"),
         )
@@ -349,6 +431,8 @@ def seed_staff(db: Session, services: list[Service]) -> None:
             "skin-lightening",
             "mesotherapy",
             "dermapen-microneedling",
+            "medical-dermatology",
+            "laser-device-based-treatments",
         ],
         "Dr. Sana": [
             "laser-hair-removal",
@@ -368,6 +452,40 @@ def seed_staff(db: Session, services: list[Service]) -> None:
             "piercing",
             "paid-package-old-owner",
             "package-price-do-3-and-get-1-free",
+            "cosmetic-injectables",
+            "anti-aging-preventive-skin-programs",
+        ],
+        "Dr. Omar": [
+            "diagnosis-treatment-acute-conditions",
+            "chronic-disease-management",
+            "preventive-health-screenings-checkups",
+            "family-medicine-wellness-care",
+            "doctor-home-consultations",
+            "continuity-of-care",
+            "personalized-treatment-pathways",
+            "clinical-outcomes-patient-satisfaction",
+        ],
+        "Dr. Leena": [
+            "preventive-general-dentistry",
+            "cosmetic-smile-design-rehabilitation",
+            "restorative-dentistry",
+            "pediatric-dentistry",
+        ],
+        "Dr. Kareem": [
+            "musculoskeletal-pain-management",
+            "post-injury-post-operative-rehabilitation",
+            "neurological-physiotherapy",
+            "home-based-physiotherapy-programs",
+            "rehabilitation-mobility-restoration",
+        ],
+        "Nurse Maryam": [
+            "skilled-nursing-care",
+            "elderly-assisted-care-services",
+            "chronic-condition-monitoring",
+            "wound-care-infection-prevention",
+            "pain-management-protocols",
+            "long-term-recovery-follow-up-care",
+            "care-coordination-between-departments",
         ],
     }
     for name, role, specialization in STAFF:
@@ -375,7 +493,7 @@ def seed_staff(db: Session, services: list[Service]) -> None:
         if not staff:
             staff = Staff(
                 name=name,
-                email=f"{name.lower().replace('dr. ', '').replace(' ', '.')}@clinicflow.local",
+                email=f"{name.lower().replace('dr. ', '').replace(' ', '.')}@royaldutch.ae",
                 phone="+971500000000",
                 role=role,
                 specialization=specialization,

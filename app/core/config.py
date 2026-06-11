@@ -4,10 +4,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    app_name: str = "ClinicFlow API"
+    app_name: str = "Royal Dutch Medical Centre API"
     app_env: str = "local"
     api_v1_prefix: str = "/api/v1"
-    database_url: str = "mysql+pymysql://root:password@127.0.0.1:3306/clinicflow"
+    database_url: str = "mysql+pymysql://root:password@127.0.0.1:3306/royaldutch"
     database_ssl: bool = False
     database_ssl_ca_path: str = ""
     database_ssl_verify_identity: bool = False

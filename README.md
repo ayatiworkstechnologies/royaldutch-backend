@@ -1,6 +1,6 @@
 # Royal Dutch Medical Centre Backend
 
-FastAPI + MySQL backend for the Royal Dutch Medical Centre hospital service booking and admin management system.
+FastAPI + MySQL backend for the Royal Dutch Medical Centre booking, admin, billing, and clinic communication system.
 
 ## Stack
 
@@ -56,15 +56,27 @@ Copy-Item .env.example .env
 Create the MySQL database:
 
 ```sql
-CREATE DATABASE clinicflow CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE royaldutch CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-Update `.env` with your MySQL and SMTP settings.
+Update `.env` with your MySQL and SMTP settings. The local default database name is `royaldutch`.
 
 Run the seed script:
 
 ```powershell
 python scripts_seed.py
+```
+
+Seed only the default admin login:
+
+```powershell
+python scripts_seed.py --login
+```
+
+Seed only categories, services and staff:
+
+```powershell
+python scripts_seed.py --services
 ```
 
 Start the API:
@@ -87,7 +99,7 @@ API docs:
 ## Default Admin
 
 ```text
-Email: admin@clinicflow.local
+Email: admin@royaldutch.ae
 Password: Admin@12345
 ```
 
@@ -96,10 +108,10 @@ Password: Admin@12345
 Required database/auth values:
 
 ```env
-APP_NAME=ClinicFlow API
+APP_NAME=Royal Dutch Medical Centre API
 APP_ENV=local
 API_V1_PREFIX=/api/v1
-DATABASE_URL=mysql+pymysql://root:password@127.0.0.1:3306/clinicflow
+DATABASE_URL=mysql+pymysql://root:password@127.0.0.1:3306/royaldutch
 DATABASE_SSL=false
 DATABASE_SSL_CA_PATH=
 DATABASE_SSL_VERIFY_IDENTITY=false
@@ -137,6 +149,13 @@ The seed loads the Royal Dutch service data:
 - Lightenings Treatments
 - Piercing
 - Packages
+- Dermatology & Aesthetic Medicine
+- Dentistry Department
+- General Medicine (GP Services)
+- Physiotherapy & Rehabilitation
+- Home Healthcare Division
+- Post-Surgical Care Programs
+- Integrated Care Model
 
 Notes:
 
@@ -269,6 +288,12 @@ Authorization: Bearer <token>
 ## Database Notes
 
 The app creates missing tables on startup with SQLAlchemy `create_all`.
+
+Seed behavior:
+
+- Creates or updates the default admin as `admin@royaldutch.ae`
+- Seeds Royal Dutch service categories, services, staff availability, and email templates
+- Uses `royaldutch` as the documented local database name
 
 For an existing database, if columns are missing after upgrades, run the migration SQL that matches the missing columns. Current upgraded tables include:
 

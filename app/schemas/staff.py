@@ -1,5 +1,7 @@
 from datetime import time
 
+from pydantic import Field
+
 from app.models.enums import RecordStatus
 from app.schemas.common import ORMModel, Timestamped
 
@@ -33,8 +35,8 @@ class StaffBase(ORMModel):
 
 
 class StaffCreate(StaffBase):
-    service_ids: list[int] = []
-    availability: list[StaffAvailabilityCreate] = []
+    service_ids: list[int] = Field(default_factory=list)
+    availability: list[StaffAvailabilityCreate] = Field(default_factory=list)
 
 
 class StaffUpdate(ORMModel):
@@ -51,5 +53,5 @@ class StaffUpdate(ORMModel):
 
 class StaffRead(StaffBase, Timestamped):
     id: int
-    service_ids: list[int] = []
-    availability: list[StaffAvailabilityRead] = []
+    service_ids: list[int] = Field(default_factory=list)
+    availability: list[StaffAvailabilityRead] = Field(default_factory=list)

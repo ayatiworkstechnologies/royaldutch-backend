@@ -1,5 +1,7 @@
 from decimal import Decimal
 
+from pydantic import Field
+
 from app.models.enums import RecordStatus
 from app.schemas.common import ORMModel, Timestamped
 
@@ -18,7 +20,7 @@ class ServiceBase(ORMModel):
 
 
 class ServiceCreate(ServiceBase):
-    staff_ids: list[int] = []
+    staff_ids: list[int] = Field(default_factory=list)
 
 
 class ServiceUpdate(ORMModel):

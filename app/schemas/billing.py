@@ -1,14 +1,16 @@
 from datetime import date
 from decimal import Decimal
 
+from pydantic import Field
+
 from app.models.enums import InvoiceStatus
 from app.schemas.common import ORMModel, Timestamped
 
 
 class InvoiceItemCreate(ORMModel):
     description: str
-    quantity: int = 1
-    unit_price: Decimal
+    quantity: int = Field(default=1, gt=0)
+    unit_price: Decimal = Field(ge=0)
 
 
 class InvoiceItemRead(InvoiceItemCreate, Timestamped):
@@ -22,19 +24,19 @@ class InvoiceCreate(ORMModel):
     patient_id: int | None = None
     issue_date: date
     due_date: date | None = None
-    discount_amount: Decimal = 0
-    tax_amount: Decimal = 0
-    paid_amount: Decimal = 0
+    discount_amount: Decimal = Field(default=0, ge=0)
+    tax_amount: Decimal = Field(default=0, ge=0)
+    paid_amount: Decimal = Field(default=0, ge=0)
     currency: str = "AED"
     status: InvoiceStatus = InvoiceStatus.draft
     notes: str | None = None
-    items: list[InvoiceItemCreate]
+    items: list[InvoiceItemCreate] = Field(min_length=1)
 
 
 class InvoiceFromBookingCreate(ORMModel):
     due_date: date | None = None
-    discount_amount: Decimal = 0
-    tax_amount: Decimal = 0
+    discount_amount: Decimal = Field(default=0, ge=0)
+    tax_amount: Decimal = Field(default=0, ge=0)
     notes: str | None = None
 
 
@@ -43,13 +45,13 @@ class InvoiceUpdate(ORMModel):
     patient_id: int | None = None
     issue_date: date | None = None
     due_date: date | None = None
-    discount_amount: Decimal | None = None
-    tax_amount: Decimal | None = None
-    paid_amount: Decimal | None = None
+    discount_amount: Decimal | None = Field(default=None, ge=0)
+    tax_amount: Decimal | None = Field(default=None, ge=0)
+    paid_amount: Decimal | None = Field(default=None, ge=0)
     currency: str | None = None
     status: InvoiceStatus | None = None
     notes: str | None = None
-    items: list[InvoiceItemCreate] | None = None
+    items: list[InvoiceItemCreate] | None = Field(default=None, min_length=1)
 
 
 class InvoiceRead(Timestamped):
@@ -68,4 +70,4 @@ class InvoiceRead(Timestamped):
     currency: str
     status: InvoiceStatus
     notes: str | None
-    items: list[InvoiceItemRead] = []
+    items: list[InvoiceItemRead] = Field(default_factory=list)

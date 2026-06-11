@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 
 from app.api.deps import DbSession, get_current_admin
+from app.models.booking import Booking
 from app.models.category import Category
 from app.models.enums import RecordStatus
 from app.models.service import Service
@@ -30,7 +31,7 @@ def list_services(
 
 @router.get("/{service_slug}", response_model=ServiceRead)
 def get_service(service_slug: str, db: DbSession) -> Service:
-    service = db.scalar(select(Service).where(Service.slug == service_slug))
+    service = db.scalar(select(Service).where(Service.slug == service_slug, Service.status == RecordStatus.active))
     if not service:
         raise HTTPException(status_code=404, detail="Service not found")
     return service
@@ -69,6 +70,11 @@ def delete_service(service_id: int, db: DbSession) -> dict:
     service = db.get(Service, service_id)
     if not service:
         raise HTTPException(status_code=404, detail="Service not found")
+    booking_count = db.scalar(select(func.count()).select_from(Booking).where(Booking.service_id == service.id))
+    if booking_count:
+        service.status = RecordStatus.inactive
+        db.commit()
+        return {"message": "Service has bookings and was marked inactive"}
     db.delete(service)
     db.commit()
     return {"message": "Service deleted"}

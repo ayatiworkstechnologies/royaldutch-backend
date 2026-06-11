@@ -18,6 +18,51 @@ BLOCKING_STATUSES = {
     BookingStatus.confirmed,
     BookingStatus.rescheduled,
 }
+DEFAULT_SLOT_MINUTES = 30
+TERMINAL_STATUSES = {
+    BookingStatus.completed,
+    BookingStatus.cancelled,
+    BookingStatus.no_show,
+}
+ALLOWED_STATUS_TRANSITIONS = {
+    BookingStatus.pending: {
+        BookingStatus.pending,
+        BookingStatus.confirmed,
+        BookingStatus.cancelled,
+        BookingStatus.rescheduled,
+    },
+    BookingStatus.confirmed: {
+        BookingStatus.confirmed,
+        BookingStatus.completed,
+        BookingStatus.cancelled,
+        BookingStatus.no_show,
+        BookingStatus.rescheduled,
+    },
+    BookingStatus.rescheduled: {
+        BookingStatus.rescheduled,
+        BookingStatus.confirmed,
+        BookingStatus.completed,
+        BookingStatus.cancelled,
+        BookingStatus.no_show,
+    },
+    BookingStatus.completed: {BookingStatus.completed},
+    BookingStatus.cancelled: {BookingStatus.cancelled},
+    BookingStatus.no_show: {BookingStatus.no_show},
+}
+
+
+def service_duration_minutes(service: Service | None) -> int:
+    if service and service.duration_minutes and service.duration_minutes > 0:
+        return service.duration_minutes
+    return DEFAULT_SLOT_MINUTES
+
+
+def validate_status_transition(current: BookingStatus, new: BookingStatus) -> None:
+    if new not in ALLOWED_STATUS_TRANSITIONS[current]:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot change booking status from {current} to {new}",
+        )
 
 
 def make_booking_code(db: Session, booking_date: date) -> str:
@@ -64,9 +109,10 @@ def find_staff_for_booking(
     if preferred_staff_id:
         query = query.where(Staff.id == preferred_staff_id)
 
+    service = db.get(Service, service_id)
     staff_candidates = db.scalars(query).unique().all()
     for staff in staff_candidates:
-        if slot_is_available(db, staff.id, booking_date, booking_time):
+        if slot_is_available(db, staff.id, booking_date, booking_time, service_duration_minutes(service)):
             return staff
 
     raise HTTPException(
@@ -75,7 +121,14 @@ def find_staff_for_booking(
     )
 
 
-def slot_is_available(db: Session, staff_id: int, booking_date: date, booking_time: time) -> bool:
+def slot_is_available(
+    db: Session,
+    staff_id: int,
+    booking_date: date,
+    booking_time: time,
+    duration_minutes: int = DEFAULT_SLOT_MINUTES,
+    exclude_booking_id: int | None = None,
+) -> bool:
     if booking_date < date.today():
         return False
 
@@ -90,22 +143,57 @@ def slot_is_available(db: Session, staff_id: int, booking_date: date, booking_ti
     if not availability:
         return False
 
-    if booking_time < availability.start_time or booking_time >= availability.end_time:
+    slot_start = datetime.combine(booking_date, booking_time)
+    slot_end = slot_start + timedelta(minutes=duration_minutes)
+    work_start = datetime.combine(booking_date, availability.start_time)
+    work_end = datetime.combine(booking_date, availability.end_time)
+    if slot_start < work_start or slot_end > work_end:
         return False
 
     if availability.break_start_time and availability.break_end_time:
-        if availability.break_start_time <= booking_time < availability.break_end_time:
+        break_start = datetime.combine(booking_date, availability.break_start_time)
+        break_end = datetime.combine(booking_date, availability.break_end_time)
+        if slot_start < break_end and slot_end > break_start:
             return False
 
-    existing = db.scalar(
-        select(Booking).where(
-            Booking.staff_id == staff_id,
-            Booking.booking_date == booking_date,
-            Booking.booking_time == booking_time,
-            Booking.status.in_(BLOCKING_STATUSES),
-        )
+    conflict_query = select(Booking).where(
+        Booking.staff_id == staff_id,
+        Booking.booking_date == booking_date,
+        Booking.status.in_(BLOCKING_STATUSES),
     )
-    return existing is None
+    if exclude_booking_id:
+        conflict_query = conflict_query.where(Booking.id != exclude_booking_id)
+
+    for existing in db.scalars(conflict_query).all():
+        existing_start = datetime.combine(existing.booking_date, existing.booking_time)
+        existing_end = existing_start + timedelta(minutes=existing.duration_minutes or DEFAULT_SLOT_MINUTES)
+        if slot_start < existing_end and slot_end > existing_start:
+            return False
+    return True
+
+
+def ensure_booking_slot_available(
+    db: Session,
+    staff_id: int,
+    booking_date: date,
+    booking_time: time,
+    duration_minutes: int,
+    exclude_booking_id: int | None = None,
+) -> None:
+    if not slot_is_available(db, staff_id, booking_date, booking_time, duration_minutes, exclude_booking_id):
+        raise HTTPException(status_code=409, detail="Selected slot is not available")
+
+
+def ensure_booking_can_block_slot(db: Session, booking: Booking, status_value: BookingStatus) -> None:
+    if status_value in BLOCKING_STATUSES and booking.staff_id:
+        ensure_booking_slot_available(
+            db,
+            booking.staff_id,
+            booking.booking_date,
+            booking.booking_time,
+            booking.duration_minutes or DEFAULT_SLOT_MINUTES,
+            booking.id,
+        )
 
 
 def create_booking(db: Session, data: BookingCreate) -> Booking:
@@ -154,20 +242,47 @@ def update_booking(db: Session, booking: Booking, data: BookingUpdate) -> Bookin
     booking_date = update_data.get("booking_date", booking.booking_date)
     booking_time = update_data.get("booking_time", booking.booking_time)
     staff_id = update_data.get("staff_id", booking.staff_id)
+    new_status = update_data.get("status", booking.status)
 
     if {"booking_date", "booking_time", "staff_id"} & update_data.keys():
-        if staff_id is None or not slot_is_available(db, staff_id, booking_date, booking_time):
-            raise HTTPException(status_code=409, detail="Selected slot is not available")
+        if staff_id is None:
+            raise HTTPException(status_code=409, detail="Selected specialist is required")
+        ensure_booking_slot_available(
+            db,
+            staff_id,
+            booking_date,
+            booking_time,
+            booking.duration_minutes or DEFAULT_SLOT_MINUTES,
+            booking.id,
+        )
+        if "status" not in update_data and booking.status not in TERMINAL_STATUSES:
+            update_data["status"] = BookingStatus.rescheduled
+
+    if "status" in update_data:
+        validate_status_transition(booking.status, update_data["status"])
+        new_status = update_data["status"]
 
     for field, value in update_data.items():
         setattr(booking, field, value)
+    ensure_booking_can_block_slot(db, booking, new_status)
     db.commit()
     db.refresh(booking)
     return booking
 
 
+def update_booking_status(db: Session, booking: Booking, status_value: BookingStatus) -> Booking:
+    validate_status_transition(booking.status, status_value)
+    ensure_booking_can_block_slot(db, booking, status_value)
+    booking.status = status_value
+    return booking
+
+
 def available_slots(db: Session, service_id: int, selected_date: date, staff_id: int | None = None) -> list[str]:
     if selected_date < date.today():
+        return []
+
+    service = db.get(Service, service_id)
+    if not service or service.status != RecordStatus.active:
         return []
 
     staff_query = (
@@ -194,7 +309,7 @@ def available_slots(db: Session, service_id: int, selected_date: date, staff_id:
         end_at = datetime.combine(selected_date, availability.end_time)
         while cursor < end_at:
             slot_time = cursor.time()
-            if slot_is_available(db, staff.id, selected_date, slot_time):
+            if slot_is_available(db, staff.id, selected_date, slot_time, service_duration_minutes(service)):
                 slots.add(slot_time.strftime("%H:%M"))
             cursor += timedelta(minutes=30)
 

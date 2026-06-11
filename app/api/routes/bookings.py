@@ -6,9 +6,9 @@ from sqlalchemy.orm import joinedload
 
 from app.api.deps import DbSession, get_current_admin
 from app.models.booking import Booking
-from app.models.enums import MailStatus
+from app.models.enums import BookingStatus, MailStatus
 from app.schemas.booking import BookingCreate, BookingDetail, BookingRead, BookingStatusUpdate, BookingUpdate
-from app.services.booking_service import available_slots, create_booking, update_booking
+from app.services.booking_service import available_slots, create_booking, update_booking, update_booking_status as set_booking_status
 from app.services.mail_service import create_booking_mail, template_for_status
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
@@ -29,7 +29,7 @@ def create_patient_booking(data: BookingCreate, db: DbSession) -> Booking:
 @router.get("", response_model=list[BookingDetail], dependencies=[Depends(get_current_admin)])
 def list_bookings(
     db: DbSession,
-    status: str | None = Query(default=None),
+    status: BookingStatus | None = Query(default=None),
     booking_date: date | None = Query(default=None),
 ) -> list[BookingDetail]:
     query = select(Booking).options(joinedload(Booking.patient), joinedload(Booking.service), joinedload(Booking.staff))
@@ -111,7 +111,7 @@ def update_booking_status(booking_id: int, data: BookingStatusUpdate, db: DbSess
     )
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
-    booking.status = data.status
+    set_booking_status(db, booking, data.status)
     template = template_for_status(data.status)
     if template:
         mail = create_booking_mail(booking, template, db=db)

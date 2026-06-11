@@ -9,6 +9,7 @@ from app.seed.clinic_data import seed_database
 from app.services.email_template_service import seed_default_email_templates
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+DEFAULT_ADMIN_EMAIL = "admin@royaldutch.ae"
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -21,7 +22,7 @@ def login(data: LoginRequest, db: DbSession) -> TokenResponse:
 
 @router.get("/admin-status")
 def admin_status(db: DbSession) -> dict:
-    admin = db.scalar(select(AdminUser).where(AdminUser.email == "admin@clinicflow.local"))
+    admin = db.scalar(select(AdminUser).where(AdminUser.email == DEFAULT_ADMIN_EMAIL))
     return {
         "exists": bool(admin),
         "email": admin.email if admin else None,
@@ -34,7 +35,7 @@ def admin_status(db: DbSession) -> dict:
 def ensure_admin(db: DbSession) -> dict:
     seed_database(db)
     seed_default_email_templates(db)
-    admin = db.scalar(select(AdminUser).where(AdminUser.email == "admin@clinicflow.local"))
+    admin = db.scalar(select(AdminUser).where(AdminUser.email == DEFAULT_ADMIN_EMAIL))
     return {
         "message": "Admin and seed data checked",
         "exists": bool(admin),

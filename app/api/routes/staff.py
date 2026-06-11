@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 
 from app.api.deps import DbSession, get_current_admin
+from app.models.booking import Booking
+from app.models.enums import RecordStatus
 from app.models.service import Service
 from app.models.staff import Staff, StaffAvailability
 from app.schemas.staff import StaffCreate, StaffRead, StaffUpdate
@@ -61,6 +63,11 @@ def delete_staff(staff_id: int, db: DbSession) -> dict:
     staff = db.get(Staff, staff_id)
     if not staff:
         raise HTTPException(status_code=404, detail="Staff not found")
+    booking_count = db.scalar(select(func.count()).select_from(Booking).where(Booking.staff_id == staff.id))
+    if booking_count:
+        staff.status = RecordStatus.inactive
+        db.commit()
+        return {"message": "Staff has bookings and was marked inactive"}
     db.delete(staff)
     db.commit()
     return {"message": "Staff deleted"}
