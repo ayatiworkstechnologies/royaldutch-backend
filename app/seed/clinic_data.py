@@ -101,6 +101,12 @@ STAFF = [
 ]
 
 
+def _set(obj, attr: str, value) -> None:
+    """Only assign if the value actually changed, to avoid needless UPDATEs on unique columns."""
+    if getattr(obj, attr) != value:
+        setattr(obj, attr, value)
+
+
 def seed_admin(db: Session) -> None:
     email = "admin@royaldutch.ae"
     admin = db.scalar(select(User).where(User.email == email))
@@ -154,9 +160,9 @@ def seed_categories_and_services(db: Session) -> list[Service]:
             )
             db.add(category)
         else:
-            category.external_id = category_data["id"]
-            category.name = category_data["category"]
-            category.status = RecordStatus.active
+            _set(category, "external_id", category_data["id"])
+            _set(category, "name", category_data["category"])
+            _set(category, "status", RecordStatus.active)
         db.flush()
 
         for service_data in category_data["services"]:
@@ -179,14 +185,14 @@ def seed_categories_and_services(db: Session) -> list[Service]:
                 )
                 db.add(service)
             else:
-                service.external_id = service_data["id"]
-                service.category_id = category.id
-                service.name = service_data["name"]
-                service.slug = service_data["slug"]
-                service.duration_minutes = service_data["durationMinutes"]
-                service.price = service_data["price"]
-                service.currency = service_data["currency"]
-                service.status = RecordStatus.active
+                _set(service, "external_id", service_data["id"])
+                _set(service, "category_id", category.id)
+                _set(service, "name", service_data["name"])
+                _set(service, "slug", service_data["slug"])
+                _set(service, "duration_minutes", service_data["durationMinutes"])
+                _set(service, "price", service_data["price"])
+                _set(service, "currency", service_data["currency"])
+                _set(service, "status", RecordStatus.active)
             db.flush()
             services.append(service)
     return services
