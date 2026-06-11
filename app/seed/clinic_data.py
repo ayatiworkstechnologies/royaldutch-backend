@@ -139,7 +139,11 @@ def seed_categories_and_services(db: Session) -> list[Service]:
             service.status = RecordStatus.inactive
 
     for category_data in ROYAL_DUTCH_SERVICES:
-        category = db.scalar(select(Category).where(Category.slug == category_data["slug"]))
+        category = db.scalar(
+            select(Category).where(
+                (Category.slug == category_data["slug"]) | (Category.external_id == category_data["id"])
+            )
+        )
         if not category:
             category = Category(
                 external_id=category_data["id"],
@@ -149,11 +153,11 @@ def seed_categories_and_services(db: Session) -> list[Service]:
                 status=RecordStatus.active,
             )
             db.add(category)
-            db.flush()
         else:
             category.external_id = category_data["id"]
             category.name = category_data["category"]
             category.status = RecordStatus.active
+        db.flush()
 
         for service_data in category_data["services"]:
             service = db.scalar(
@@ -174,7 +178,6 @@ def seed_categories_and_services(db: Session) -> list[Service]:
                     status=RecordStatus.active,
                 )
                 db.add(service)
-                db.flush()
             else:
                 service.external_id = service_data["id"]
                 service.category_id = category.id
@@ -184,6 +187,7 @@ def seed_categories_and_services(db: Session) -> list[Service]:
                 service.price = service_data["price"]
                 service.currency = service_data["currency"]
                 service.status = RecordStatus.active
+            db.flush()
             services.append(service)
     return services
 
