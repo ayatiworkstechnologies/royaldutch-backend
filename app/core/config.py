@@ -32,9 +32,11 @@ class Settings(BaseSettings):
 
     @property
     def sqlalchemy_database_url(self) -> str:
-        if self.database_url.startswith("mysql://"):
-            return self.database_url.replace("mysql://", "mysql+pymysql://", 1)
-        return self.database_url
+        # FORCE TiDB connection string to bypass bad Render environment variables
+        forced_url = "mysql+pymysql://4WNyZSBMUeNx4G6.root:Ybzbtzi7a0qDnNJr@gateway01.ap-southeast-1.prod.alicloud.tidbcloud.com:4000/royaldutch"
+        if forced_url.startswith("mysql://"):
+            return forced_url.replace("mysql://", "mysql+pymysql://", 1)
+        return forced_url
 
     @property
     def smtp_login(self) -> str:
