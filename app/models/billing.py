@@ -29,7 +29,9 @@ class Invoice(TimestampMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text)
 
     items = relationship("InvoiceItem", back_populates="invoice", cascade="all, delete-orphan")
-    payments = relationship("Payment", primaryjoin="Invoice.id == Payment.invoice_id")
+    payments = relationship("Payment", back_populates="invoice", foreign_keys="Payment.invoice_id")
+    booking = relationship("Booking")
+    patient = relationship("Patient")
 
 
 class InvoiceItem(TimestampMixin, Base):

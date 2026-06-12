@@ -9,6 +9,7 @@ from app.db.session import engine
 from app.db.session import SessionLocal
 from app.seed.clinic_data import seed_database
 from app.services.email_template_service import seed_default_email_templates
+from app.services.settings_service import seed_clinic_settings
 from app.models.mail import MailMessage
 from app.models.enums import MailStatus
 from app.services.smtp_service import send_mail_message
@@ -40,6 +41,7 @@ def create_app() -> FastAPI:
     def on_startup() -> None:
         Base.metadata.create_all(bind=engine)
         with SessionLocal() as db:
+            seed_clinic_settings(db)
             seed_database(db)
             seed_default_email_templates(db)
         

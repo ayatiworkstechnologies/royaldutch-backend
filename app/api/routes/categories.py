@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.api.deps import DbSession, get_current_admin
 from app.models.category import Category
 from app.models.enums import RecordStatus
+from app.models.service import Service
 from app.schemas.category import CategoryCreate, CategoryRead, CategoryUpdate
 
 router = APIRouter(prefix="/categories", tags=["categories"])
@@ -46,6 +47,15 @@ def delete_category(category_id: int, db: DbSession) -> dict:
     category = db.get(Category, category_id)
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
+    service_count = db.scalar(select(func.count()).select_from(Service).where(Service.category_id == category.id))
+    if service_count:
+        category.status = RecordStatus.inactive
+        db.query(Service).filter(Service.category_id == category.id).update(
+            {Service.status: RecordStatus.inactive},
+            synchronize_session=False,
+        )
+        db.commit()
+        return {"message": "Category has services and was marked inactive"}
     db.delete(category)
     db.commit()
     return {"message": "Category deleted"}

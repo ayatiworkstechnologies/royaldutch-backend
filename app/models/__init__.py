@@ -1,4 +1,5 @@
 from app.models.user import User
+from app.models.auth_otp import AuthOtp
 from app.models.billing import Invoice, InvoiceItem
 from app.models.booking import Booking
 from app.models.category import Category
@@ -8,10 +9,12 @@ from app.models.mail import MailMessage
 from app.models.patient import Patient
 from app.models.payment import Payment
 from app.models.service import Service
+from app.models.setting import ClinicSetting
 from app.models.staff import Staff, StaffAvailability, staff_services
 
 __all__ = [
     "User",
+    "AuthOtp",
     "Invoice",
     "InvoiceItem",
     "Booking",
@@ -22,6 +25,7 @@ __all__ = [
     "Patient",
     "Payment",
     "Service",
+    "ClinicSetting",
     "Staff",
     "StaffAvailability",
     "staff_services",

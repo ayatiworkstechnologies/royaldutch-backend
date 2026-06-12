@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
-from app.api.deps import DbSession, get_current_admin
+from app.api.deps import DbSession, get_current_admin, get_current_user
 from app.models.booking import Booking
 from app.models.enums import BookingStatus, MailStatus
 from app.schemas.booking import BookingCreate, BookingDetail, BookingRead, BookingStatusUpdate, BookingUpdate
@@ -57,6 +57,18 @@ def lookup_patient_bookings(db: DbSession, phone: str = Query(...)) -> list[Book
         select(Booking)
         .join(Booking.patient)
         .where(Booking.patient.has(phone=phone))
+        .options(joinedload(Booking.patient), joinedload(Booking.service), joinedload(Booking.staff))
+        .order_by(Booking.booking_date.desc(), Booking.booking_time.desc())
+    ).unique().all()
+    return [to_booking_detail(booking) for booking in bookings]
+
+
+@router.get("/me", response_model=list[BookingDetail])
+def my_bookings(db: DbSession, user=Depends(get_current_user)) -> list[BookingDetail]:
+    bookings = db.scalars(
+        select(Booking)
+        .join(Booking.patient)
+        .where(Booking.patient.has(email=user.email))
         .options(joinedload(Booking.patient), joinedload(Booking.service), joinedload(Booking.staff))
         .order_by(Booking.booking_date.desc(), Booking.booking_time.desc())
     ).unique().all()

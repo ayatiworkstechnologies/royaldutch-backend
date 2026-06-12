@@ -16,15 +16,19 @@ def normalized_database_url():
     return url.set(query=query)
 
 
+database_url = normalized_database_url()
+
 connect_args = {}
-if settings.database_ssl:
+if database_url.drivername.startswith("sqlite"):
+    connect_args["check_same_thread"] = False
+if settings.database_ssl and database_url.drivername.startswith("mysql"):
     connect_args["ssl"] = {}
     if settings.database_ssl_ca_path:
         connect_args["ssl_ca"] = settings.database_ssl_ca_path
     connect_args["ssl_verify_identity"] = settings.database_ssl_verify_identity
 
 engine = create_engine(
-    normalized_database_url(),
+    database_url,
     pool_pre_ping=True,
     pool_recycle=3600,
     connect_args=connect_args,

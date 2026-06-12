@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     smtp_from_email: str = ""
     smtp_from_name: str = "Royal Dutch Medical Centre"
     smtp_use_ssl: bool = True
+    smtp_use_tls: bool = True
+    google_client_id: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
@@ -32,11 +34,9 @@ class Settings(BaseSettings):
 
     @property
     def sqlalchemy_database_url(self) -> str:
-        # FORCE TiDB connection string to bypass bad Render environment variables
-        forced_url = "mysql+pymysql://4WNyZSBMUeNx4G6.root:Ybzbtzi7a0qDnNJr@gateway01.ap-southeast-1.prod.alicloud.tidbcloud.com:4000/royaldutch"
-        if forced_url.startswith("mysql://"):
-            return forced_url.replace("mysql://", "mysql+pymysql://", 1)
-        return forced_url
+        if self.database_url.startswith("mysql://"):
+            return self.database_url.replace("mysql://", "mysql+pymysql://", 1)
+        return self.database_url
 
     @property
     def smtp_login(self) -> str:

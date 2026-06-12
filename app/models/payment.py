@@ -28,3 +28,4 @@ class Payment(TimestampMixin, Base):
     transaction_id: Mapped[str | None] = mapped_column(String(180), unique=True)
 
     booking = relationship("Booking", back_populates="payments")
+    invoice = relationship("Invoice", back_populates="payments", foreign_keys=[invoice_id])

@@ -2,13 +2,16 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 
 from app.api.deps import DbSession, get_current_admin
 from app.api.routes.billing import recalculate
 from app.models.billing import Invoice
-from app.models.enums import PaymentStatus
+from app.models.booking import Booking
+from app.models.enums import MailStatus, PaymentStatus
 from app.models.payment import Payment
 from app.schemas.payment import PaymentCreate, PaymentRead, PaymentUpdate
+from app.services.mail_service import create_payment_mail
 
 router = APIRouter(prefix="/payments", tags=["payments"], dependencies=[Depends(get_current_admin)])
 
@@ -40,9 +43,25 @@ def sync_invoice_paid_amount(db: DbSession, invoice_id: int | None) -> None:
     recalculate(invoice)
 
 
+def payment_detail_query():
+    return select(Payment).options(
+        joinedload(Payment.invoice).joinedload(Invoice.patient),
+        joinedload(Payment.invoice).joinedload(Invoice.booking).joinedload(Booking.patient),
+        joinedload(Payment.invoice).joinedload(Invoice.booking).joinedload(Booking.service),
+    )
+
+
 @router.get("", response_model=list[PaymentRead])
 def list_payments(db: DbSession) -> list[Payment]:
     return list(db.scalars(select(Payment).order_by(Payment.created_at.desc())).all())
+
+
+@router.get("/{payment_id}", response_model=PaymentRead)
+def get_payment(payment_id: int, db: DbSession) -> Payment:
+    payment = db.scalar(payment_detail_query().where(Payment.id == payment_id))
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    return payment
 
 
 @router.post("", response_model=PaymentRead)
@@ -52,6 +71,10 @@ def create_payment(data: PaymentCreate, db: DbSession) -> Payment:
     db.add(payment)
     db.flush()
     sync_invoice_paid_amount(db, payment.invoice_id)
+    if payment.payment_status in COUNTED_PAYMENT_STATUSES:
+        mail = create_payment_mail(payment, "payment_received", MailStatus.queued, db=db)
+        if mail:
+            db.add(mail)
     db.commit()
     db.refresh(payment)
     return payment
@@ -63,6 +86,7 @@ def update_payment(payment_id: int, data: PaymentUpdate, db: DbSession) -> Payme
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
     old_invoice_id = payment.invoice_id
+    old_status = payment.payment_status
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(payment, field, value)
     get_invoice_or_404(db, payment.invoice_id)
@@ -70,6 +94,39 @@ def update_payment(payment_id: int, data: PaymentUpdate, db: DbSession) -> Payme
     sync_invoice_paid_amount(db, old_invoice_id)
     if payment.invoice_id != old_invoice_id:
         sync_invoice_paid_amount(db, payment.invoice_id)
+    if payment.payment_status in COUNTED_PAYMENT_STATUSES and old_status not in COUNTED_PAYMENT_STATUSES:
+        mail = create_payment_mail(payment, "payment_received", MailStatus.queued, db=db)
+        if mail:
+            db.add(mail)
     db.commit()
     db.refresh(payment)
     return payment
+
+
+@router.post("/{payment_id}/mail/{template}")
+def queue_payment_mail(payment_id: int, template: str, db: DbSession) -> dict:
+    allowed_templates = {"payment_received"}
+    if template not in allowed_templates:
+        raise HTTPException(status_code=400, detail="Unknown payment mail template")
+    payment = db.scalar(payment_detail_query().where(Payment.id == payment_id))
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    mail = create_payment_mail(payment, template, MailStatus.queued, db=db)
+    if not mail:
+        raise HTTPException(status_code=400, detail="Patient email is missing")
+    db.add(mail)
+    db.commit()
+    return {"message": "Payment mail queued", "template": template}
+
+
+@router.delete("/{payment_id}")
+def delete_payment(payment_id: int, db: DbSession) -> dict:
+    payment = db.get(Payment, payment_id)
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    invoice_id = payment.invoice_id
+    db.delete(payment)
+    db.flush()
+    sync_invoice_paid_amount(db, invoice_id)
+    db.commit()
+    return {"message": "Payment deleted"}

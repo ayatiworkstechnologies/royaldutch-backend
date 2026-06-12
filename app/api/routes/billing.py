@@ -2,15 +2,20 @@ from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
 from app.api.deps import DbSession, get_current_admin
 from app.models.billing import Invoice, InvoiceItem
 from app.models.booking import Booking
+from app.models.enums import MailStatus
 from app.models.enums import InvoiceStatus
 from app.schemas.billing import InvoiceCreate, InvoiceFromBookingCreate, InvoiceRead, InvoiceUpdate
+from app.services.invoice_pdf_service import generate_invoice_pdf, invoice_pdf_filename
+from app.services.mail_service import create_invoice_mail
+from app.services.settings_service import get_clinic_settings
+from app.services.smtp_service import send_mail_message
 
 router = APIRouter(prefix="/billing", tags=["billing"], dependencies=[Depends(get_current_admin)])
 
@@ -42,9 +47,26 @@ def recalculate(invoice: Invoice) -> None:
         invoice.status = InvoiceStatus.partially_paid
 
 
+def invoice_detail_query():
+    return select(Invoice).options(
+        joinedload(Invoice.items),
+        joinedload(Invoice.patient),
+        joinedload(Invoice.booking).joinedload(Booking.patient),
+        joinedload(Invoice.booking).joinedload(Booking.service),
+    )
+
+
 @router.get("", response_model=list[InvoiceRead])
 def list_invoices(db: DbSession) -> list[Invoice]:
-    return list(db.scalars(select(Invoice).options(joinedload(Invoice.items)).order_by(Invoice.created_at.desc())).unique().all())
+    return list(db.scalars(invoice_detail_query().order_by(Invoice.created_at.desc())).unique().all())
+
+
+@router.get("/{invoice_id}", response_model=InvoiceRead)
+def get_invoice(invoice_id: int, db: DbSession) -> Invoice:
+    invoice = db.scalar(invoice_detail_query().where(Invoice.id == invoice_id))
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return invoice
 
 
 @router.post("", response_model=InvoiceRead)
@@ -128,3 +150,56 @@ def delete_invoice(invoice_id: int, db: DbSession) -> dict:
     db.delete(invoice)
     db.commit()
     return {"message": "Invoice deleted"}
+
+
+@router.post("/{invoice_id}/mail/{template}")
+def queue_invoice_mail(invoice_id: int, template: str, db: DbSession) -> dict:
+    allowed_templates = {"invoice_issued"}
+    if template not in allowed_templates:
+        raise HTTPException(status_code=400, detail="Unknown invoice mail template")
+    invoice = db.scalar(invoice_detail_query().where(Invoice.id == invoice_id))
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    mail = create_invoice_mail(invoice, template, MailStatus.queued, db=db)
+    if not mail:
+        raise HTTPException(status_code=400, detail="Patient email is missing")
+    db.add(mail)
+    db.commit()
+    return {"message": "Invoice mail queued", "template": template}
+
+
+@router.get("/{invoice_id}/pdf")
+def download_invoice_pdf(invoice_id: int, db: DbSession) -> Response:
+    invoice = db.scalar(invoice_detail_query().where(Invoice.id == invoice_id))
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    pdf = generate_invoice_pdf(invoice, get_clinic_settings(db))
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{invoice_pdf_filename(invoice)}"'},
+    )
+
+
+@router.post("/{invoice_id}/send")
+def send_invoice_email(invoice_id: int, db: DbSession, attach_pdf: bool = True) -> dict:
+    invoice = db.scalar(invoice_detail_query().where(Invoice.id == invoice_id))
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    mail = create_invoice_mail(invoice, "invoice_issued", MailStatus.queued, db=db)
+    if not mail:
+        raise HTTPException(status_code=400, detail="Patient email is missing")
+
+    attachments = []
+    if attach_pdf:
+        attachments.append(
+            (
+                invoice_pdf_filename(invoice),
+                generate_invoice_pdf(invoice, get_clinic_settings(db)),
+                "application/pdf",
+            )
+        )
+    send_mail_message(mail, attachments=attachments)
+    db.add(mail)
+    db.commit()
+    return {"message": "Invoice email processed", "status": mail.status, "error_message": mail.error_message}
