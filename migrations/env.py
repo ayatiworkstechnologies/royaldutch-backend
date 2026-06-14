@@ -1,7 +1,7 @@
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import engine_from_config, make_url, pool
 
 from app.core.config import get_settings
 from app.db.base import Base
@@ -34,7 +34,20 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     configuration = config.get_section(config.config_ini_section, {})
     configuration["sqlalchemy.url"] = database_url()
-    connectable = engine_from_config(configuration, prefix="sqlalchemy.", poolclass=pool.NullPool)
+    settings = get_settings()
+    connect_args = {}
+    url = make_url(configuration["sqlalchemy.url"])
+    if settings.database_ssl and url.drivername.startswith("mysql"):
+        connect_args["ssl"] = {}
+        if settings.database_ssl_ca_path:
+            connect_args["ssl_ca"] = settings.database_ssl_ca_path
+        connect_args["ssl_verify_identity"] = settings.database_ssl_verify_identity
+    connectable = engine_from_config(
+        configuration,
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+        connect_args=connect_args,
+    )
 
     with connectable.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
