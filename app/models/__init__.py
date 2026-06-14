@@ -1,7 +1,8 @@
 from app.models.user import User
+from app.models.audit_log import AuditLog
 from app.models.auth_otp import AuthOtp
 from app.models.billing import Invoice, InvoiceItem
-from app.models.booking import Booking
+from app.models.booking import Booking, BookingSlotLock
 from app.models.category import Category
 from app.models.email_template import EmailTemplate
 from app.models.notification import Notification
@@ -14,10 +15,12 @@ from app.models.staff import Staff, StaffAvailability, staff_services
 
 __all__ = [
     "User",
+    "AuditLog",
     "AuthOtp",
     "Invoice",
     "InvoiceItem",
     "Booking",
+    "BookingSlotLock",
     "Category",
     "EmailTemplate",
     "Notification",

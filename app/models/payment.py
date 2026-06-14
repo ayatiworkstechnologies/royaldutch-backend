@@ -15,6 +15,7 @@ class Payment(TimestampMixin, Base):
     booking_id: Mapped[int | None] = mapped_column(ForeignKey("bookings.id"), nullable=True, index=True)
     invoice_id: Mapped[int | None] = mapped_column(ForeignKey("invoices.id"), nullable=True, index=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    refund_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
     payment_method: Mapped[PaymentMethod] = mapped_column(
         Enum(PaymentMethod),
         default=PaymentMethod.pay_at_clinic,

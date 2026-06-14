@@ -61,6 +61,27 @@ CREATE DATABASE royaldutch CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 Update `.env` with your MySQL and SMTP settings. The local default database name is `royaldutch`.
 
+Run database migrations:
+
+```powershell
+alembic upgrade head
+```
+
+Create a new migration after model changes:
+
+```powershell
+alembic revision --autogenerate -m "describe change"
+alembic upgrade head
+```
+
+For an existing database that already matches the models, stamp only after schema verification:
+
+```powershell
+alembic stamp head
+```
+
+For local development only, the app still creates missing tables on startup when `APP_ENV` is not `production`. Production should use Alembic migrations instead of relying on `create_all`.
+
 Run the seed script:
 
 ```powershell
@@ -84,6 +105,14 @@ Start the API:
 ```powershell
 uvicorn app.main:app --reload
 ```
+
+Start the mail worker:
+
+```powershell
+python -m app.workers.mail_worker
+```
+
+Local development can also run the in-process worker from the API process. Production should run a separate worker process.
 
 Render production start command:
 
@@ -132,6 +161,12 @@ SMTP_PASSWORD=
 SMTP_FROM_EMAIL=
 SMTP_FROM_NAME=Royal Dutch Medical Centre
 SMTP_USE_SSL=true
+SMTP_USE_TLS=true
+GOOGLE_CLIENT_ID=
+TRUSTED_HOSTS=
+RUN_STARTUP_SEEDERS=true
+ENABLE_IN_PROCESS_WORKER=false
+REDIS_URL=
 ```
 
 Do not commit real SMTP passwords.
@@ -287,13 +322,22 @@ Authorization: Bearer <token>
 
 ## Database Notes
 
-The app creates missing tables on startup with SQLAlchemy `create_all`.
+The app creates missing tables on startup with SQLAlchemy `create_all` only outside production.
+
+Production database workflow:
+
+1. Verify `.env` points to the production database.
+2. Run `alembic upgrade head`.
+3. Run seed scripts explicitly only when needed.
+4. Start the API process.
+5. Start the mail worker process separately.
 
 Seed behavior:
 
 - Creates or updates the default admin as `admin@royaldutch.ae`
 - Seeds Royal Dutch service categories, services, staff availability, and email templates
 - Uses `royaldutch` as the documented local database name
+- Startup seeders run only when `RUN_STARTUP_SEEDERS=true` and `APP_ENV` is not `production`
 
 For an existing database, if columns are missing after upgrades, run the migration SQL that matches the missing columns. Current upgraded tables include:
 
@@ -303,6 +347,12 @@ For an existing database, if columns are missing after upgrades, run the migrati
 - `email_templates`
 
 ## Verification
+
+Run tests:
+
+```powershell
+pytest
+```
 
 Backend import check:
 
@@ -315,3 +365,131 @@ SMTP check:
 ```powershell
 python -B -c "from app.services.smtp_service import check_smtp_connection; print(check_smtp_connection()['ok'])"
 ```
+
+## Production Checklist
+
+- Set `APP_ENV=production`.
+- Set a strong `SECRET_KEY` with at least 32 characters.
+- Set `RUN_STARTUP_SEEDERS=false`.
+- Keep `ENABLE_IN_PROCESS_WORKER=false` and run `python -m app.workers.mail_worker` separately.
+- Set `REDIS_URL` for Redis-backed production rate limiting.
+- Configure explicit `BACKEND_CORS_ORIGINS`.
+- Configure `TRUSTED_HOSTS` for production domains.
+- Run `alembic upgrade head` before deployment.
+- Validate `alembic upgrade head` against a MySQL staging database before production.
+- Verify SMTP settings with `/api/v1/mail/smtp-status`.
+- Remove or rotate the default admin password after initial setup.
+- Run the mail worker as a separate process with `python -m app.workers.mail_worker`.
+- Keep Redis available through `REDIS_URL` so rate limits are shared across API instances.
+- Confirm booking concurrency protection by verifying `booking_slot_locks` exists and has the `uq_booking_slot_lock` unique constraint.
+- Confirm logs include `X-Request-ID` values for request tracing.
+
+## Final Production Deployment
+
+New database deployment:
+
+```powershell
+$env:APP_ENV="production"
+$env:RUN_STARTUP_SEEDERS="false"
+$env:ENABLE_IN_PROCESS_WORKER="false"
+alembic upgrade head
+python scripts_seed.py --login
+python -m app.workers.mail_worker
+```
+
+Existing database deployment:
+
+```powershell
+python scripts/verify_schema_for_stamp.py
+python scripts/stamp_existing_schema.py
+alembic upgrade head
+python -m app.workers.mail_worker
+```
+
+Do not stamp an existing database until verification passes. The verification script checks required tables, columns, and critical indexes, including `booking_slot_locks`, `audit_logs.request_id`, and mail queue indexes.
+
+Production environment minimum:
+
+```env
+APP_ENV=production
+RUN_STARTUP_SEEDERS=false
+ENABLE_IN_PROCESS_WORKER=false
+SECRET_KEY=<strong-random-secret>
+DATABASE_URL=mysql+pymysql://user:password@host:3306/royaldutch
+REDIS_URL=redis://host:6379/0
+TRUSTED_HOSTS=api.example.com
+BACKEND_CORS_ORIGINS=https://example.com
+SMTP_HOST=smtp.example.com
+SMTP_FROM_EMAIL=noreply@example.com
+SMTP_USERNAME=<smtp-user>
+SMTP_PASSWORD=<smtp-password>
+```
+
+Booking concurrency behavior:
+
+- Public booking URLs are unchanged.
+- The service still performs availability and overlap checks.
+- A database row is inserted into `booking_slot_locks` before a booking is finalized.
+- The unique constraint on `staff_id`, `booking_date`, and `booking_time` prevents two API instances from taking the same staff/time slot.
+- Cancelling or marking a booking as `no_show` releases the slot lock.
+- Rescheduling updates the lock to the new staff/date/time slot.
+
+SMTP validation:
+
+```powershell
+GET /api/v1/mail/smtp-status
+pytest tests/test_smtp_service.py
+pytest tests/test_production_hardening.py
+```
+
+CI now runs:
+
+- dependency installation
+- `alembic upgrade head` against a MySQL 8 service
+- `pytest`
+
+## MySQL Migration Validation
+
+Use a staging database that matches the production MySQL major version:
+
+```powershell
+$env:DATABASE_URL="mysql+pymysql://user:password@host:3306/royaldutch_staging"
+alembic upgrade head
+```
+
+Check enum columns, foreign keys, unique constraints, indexes, and the mail queue scan index after migration. Only run `alembic stamp head` for an existing database after table, column, enum, index, and constraint compatibility has been verified.
+
+## Audit Logs
+
+Audit logs are restricted to `super_admin`:
+
+```text
+GET /api/v1/audit-logs
+GET /api/v1/audit-logs?page=1&limit=20
+GET /api/v1/audit-logs?action=settings.update
+```
+
+Audited actions include admin login, booking writes, patient writes, notification writes, category/service/staff writes, billing/payment writes, settings updates, manual mail send/delete, and email-template changes.
+
+## Revenue Semantics
+
+Dashboard revenue now separates `booking_revenue`, `invoice_revenue`, `collected_revenue`, `refunded_revenue`, and `net_revenue`. For frontend compatibility, `total_revenue` remains present and now equals `net_revenue`.
+
+## Redis Rate Limiting
+
+Local/dev uses in-memory rate limiting by default. Production should set:
+
+```env
+REDIS_URL=redis://host:6379/0
+```
+
+When `REDIS_URL` is set, login and OTP limits are shared across API instances through Redis.
+
+## Troubleshooting
+
+- If production startup fails with `SECRET_KEY must be a strong value`, update `.env` with a strong random secret.
+- If tables are missing in production, run `alembic upgrade head`.
+- If `alembic upgrade head` fails with `Table 'users' already exists`, the database was created before Alembic. Run `python scripts/stamp_existing_schema.py`. This verifies required tables/columns/indexes first and then runs `alembic stamp head`.
+- If using an existing manually-created database, verify schema first, then run `alembic stamp head`.
+- If queued mail is not sending, run `python -m app.workers.mail_worker` and check `mail_messages.error_message`.
+- If rate limits block tests or local manual attempts, restart the process; the local limiter is in-memory.

@@ -10,4 +10,9 @@ class DashboardStats(ORMModel):
     completed_bookings: int
     cancelled_bookings: int
     total_revenue: Decimal
+    booking_revenue: Decimal = Decimal("0")
+    invoice_revenue: Decimal = Decimal("0")
+    collected_revenue: Decimal = Decimal("0")
+    refunded_revenue: Decimal = Decimal("0")
+    net_revenue: Decimal = Decimal("0")
     most_booked_services: list[dict]

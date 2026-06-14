@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     smtp_use_ssl: bool = True
     smtp_use_tls: bool = True
     google_client_id: str = ""
+    trusted_hosts: str = ""
+    run_startup_seeders: bool = True
+    enable_in_process_worker: bool = False
+    redis_url: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
@@ -45,6 +49,19 @@ class Settings(BaseSettings):
     @property
     def mail_from(self) -> str:
         return self.smtp_from_email or self.smtp_login
+
+    @property
+    def trusted_host_list(self) -> list[str]:
+        return [host.strip() for host in self.trusted_hosts.split(",") if host.strip()]
+
+    def validate_production_safety(self) -> None:
+        if self.app_env != "production":
+            return
+        weak_secrets = {"", "change-this-secret-key", "test-secret"}
+        if self.secret_key in weak_secrets or len(self.secret_key) < 32:
+            raise RuntimeError("SECRET_KEY must be a strong value in production")
+        if not self.backend_cors_origins and not self.backend_cors_origin_regex:
+            raise RuntimeError("Production CORS origins must be explicitly configured")
 
 
 @lru_cache

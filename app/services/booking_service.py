@@ -1,13 +1,19 @@
 from datetime import date, datetime, time, timedelta
+from contextlib import contextmanager
+from decimal import Decimal
+from threading import RLock
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.booking import Booking
-from app.models.enums import BookingStatus, RecordStatus, UserRole
+from app.models.booking import Booking, BookingSlotLock
+from app.models.billing import Invoice
+from app.models.enums import BookingStatus, InvoiceStatus, PaymentStatus, RecordStatus, UserRole
 from app.models.notification import Notification
 from app.models.patient import Patient
+from app.models.payment import Payment
 from app.models.service import Service
 from app.models.staff import Staff, StaffAvailability
 from app.models.user import User
@@ -50,6 +56,17 @@ ALLOWED_STATUS_TRANSITIONS = {
     BookingStatus.cancelled: {BookingStatus.cancelled},
     BookingStatus.no_show: {BookingStatus.no_show},
 }
+_booking_locks: dict[tuple[int, date], RLock] = {}
+_booking_locks_guard = RLock()
+
+
+@contextmanager
+def staff_date_booking_lock(staff_id: int, booking_date: date):
+    key = (staff_id, booking_date)
+    with _booking_locks_guard:
+        lock = _booking_locks.setdefault(key, RLock())
+    with lock:
+        yield
 
 
 def service_duration_minutes(service: Service | None) -> int:
@@ -79,6 +96,66 @@ def make_booking_code(db: Session, booking_date: date) -> str:
             continue
     next_number = (max(numbers) if numbers else 0) + 1
     return f"{prefix}{next_number:04d}"
+
+
+def is_unique_booking_code_error(exc: IntegrityError) -> bool:
+    text = str(exc.orig).lower()
+    return "booking_code" in text or "bookings.booking_code" in text
+
+
+def slot_lock_key(staff_id: int, booking_date: date, booking_time: time) -> str:
+    return f"{staff_id}:{booking_date.isoformat()}:{booking_time.isoformat()}"
+
+
+def acquire_booking_slot_lock(
+    db: Session,
+    staff_id: int,
+    booking_date: date,
+    booking_time: time,
+    booking_id: int | None = None,
+) -> BookingSlotLock:
+    lock = BookingSlotLock(
+        staff_id=staff_id,
+        booking_date=booking_date,
+        booking_time=booking_time,
+        lock_key=slot_lock_key(staff_id, booking_date, booking_time),
+        booking_id=booking_id,
+    )
+    db.add(lock)
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        text = str(exc.orig).lower()
+        if "booking_slot" in text or "uq_booking_slot_lock" in text or "lock_key" in text:
+            raise HTTPException(status_code=409, detail="Selected slot is not available") from exc
+        raise
+    return lock
+
+
+def release_booking_slot_lock(db: Session, booking: Booking) -> None:
+    if not booking.staff_id:
+        return
+    lock = db.scalar(select(BookingSlotLock).where(BookingSlotLock.booking_id == booking.id))
+    if lock:
+        db.delete(lock)
+
+
+def sync_booking_slot_lock(db: Session, booking: Booking, status_value: BookingStatus) -> None:
+    existing_lock = db.scalar(select(BookingSlotLock).where(BookingSlotLock.booking_id == booking.id))
+    should_lock = status_value in BLOCKING_STATUSES and booking.staff_id is not None
+    if not should_lock:
+        if existing_lock:
+            db.delete(existing_lock)
+        return
+
+    desired_key = slot_lock_key(booking.staff_id, booking.booking_date, booking.booking_time)
+    if existing_lock and existing_lock.lock_key == desired_key:
+        return
+    if existing_lock:
+        db.delete(existing_lock)
+        db.flush()
+    acquire_booking_slot_lock(db, booking.staff_id, booking.booking_date, booking.booking_time, booking.id)
 
 def get_or_create_patient(db: Session, data) -> Patient:
     patient = db.scalar(select(Patient).where(Patient.phone == data.phone))
@@ -215,39 +292,53 @@ def create_booking(db: Session, data: BookingCreate) -> Booking:
         raise HTTPException(status_code=404, detail="Service not found or inactive")
 
     staff = find_staff_for_booking(db, service.id, data.booking_date, data.booking_time, data.staff_id)
-    patient = get_or_create_patient(db, data.patient)
+    with staff_date_booking_lock(staff.id, data.booking_date):
+        ensure_booking_slot_available(db, staff.id, data.booking_date, data.booking_time, service_duration_minutes(service))
+        patient = get_or_create_patient(db, data.patient)
+        slot_lock = acquire_booking_slot_lock(db, staff.id, data.booking_date, data.booking_time)
 
-    booking = Booking(
-        booking_code=make_booking_code(db, data.booking_date),
-        patient_id=patient.id,
-        service_id=service.id,
-        staff_id=staff.id,
-        booking_date=data.booking_date,
-        booking_time=data.booking_time,
-        duration_minutes=service.duration_minutes,
-        price=service.price,
-        currency=service.currency,
-        notes=data.notes,
-        first_visit=data.first_visit,
-        status=BookingStatus.pending,
-    )
-    db.add(booking)
-    db.flush()
-    db.add(
-        Notification(
-            booking_id=booking.id,
-            channel="dashboard",
-            recipient="admin",
-            subject="New appointment request",
-            message=f"New booking request {booking.booking_code} received.",
-        )
-    )
-    mail = create_booking_mail(booking, "created")
-    if mail:
-        db.add(mail)
-    db.commit()
-    db.refresh(booking)
-    return booking
+        for _ in range(3):
+            booking = Booking(
+                booking_code=make_booking_code(db, data.booking_date),
+                patient_id=patient.id,
+                service_id=service.id,
+                staff_id=staff.id,
+                booking_date=data.booking_date,
+                booking_time=data.booking_time,
+                duration_minutes=service.duration_minutes,
+                price=service.price,
+                currency=service.currency,
+                notes=data.notes,
+                first_visit=data.first_visit,
+                status=BookingStatus.pending,
+            )
+            db.add(booking)
+            try:
+                db.flush()
+                slot_lock.booking_id = booking.id
+                db.add(
+                    Notification(
+                        booking_id=booking.id,
+                        channel="dashboard",
+                        recipient="admin",
+                        subject="New appointment request",
+                        message=f"New booking request {booking.booking_code} received.",
+                    )
+                )
+                mail = create_booking_mail(booking, "created")
+                if mail:
+                    db.add(mail)
+                db.commit()
+                db.refresh(booking)
+                return booking
+            except IntegrityError as exc:
+                db.rollback()
+                if not is_unique_booking_code_error(exc):
+                    raise
+                patient = get_or_create_patient(db, data.patient)
+                slot_lock = acquire_booking_slot_lock(db, staff.id, data.booking_date, data.booking_time)
+
+    raise HTTPException(status_code=409, detail="Could not allocate booking code. Please retry.")
 
 
 def update_booking(db: Session, booking: Booking, data: BookingUpdate) -> Booking:
@@ -278,6 +369,7 @@ def update_booking(db: Session, booking: Booking, data: BookingUpdate) -> Bookin
     for field, value in update_data.items():
         setattr(booking, field, value)
     ensure_booking_can_block_slot(db, booking, new_status)
+    sync_booking_slot_lock(db, booking, new_status)
     db.commit()
     db.refresh(booking)
     return booking
@@ -287,6 +379,7 @@ def update_booking_status(db: Session, booking: Booking, status_value: BookingSt
     validate_status_transition(booking.status, status_value)
     ensure_booking_can_block_slot(db, booking, status_value)
     booking.status = status_value
+    sync_booking_slot_lock(db, booking, status_value)
     return booking
 
 
@@ -334,9 +427,24 @@ def dashboard_stats(db: Session) -> dict:
     count_status = lambda status_value: db.scalar(
         select(func.count()).select_from(Booking).where(Booking.status == status_value)
     )
-    revenue = db.scalar(
+    booking_revenue = db.scalar(
         select(func.coalesce(func.sum(Booking.price), 0)).where(Booking.status == BookingStatus.completed)
     )
+    invoice_revenue = db.scalar(
+        select(func.coalesce(func.sum(Invoice.total_amount), 0)).where(Invoice.status != InvoiceStatus.cancelled)
+    )
+    collected_revenue = db.scalar(
+        select(func.coalesce(func.sum(Payment.amount), 0)).where(Payment.payment_status.in_({PaymentStatus.paid, PaymentStatus.partially_paid}))
+    )
+    refunded_revenue = db.scalar(
+        select(func.coalesce(func.sum(Payment.refund_amount), 0)).where(Payment.refund_amount > 0)
+    )
+    net_revenue = collected_revenue - refunded_revenue
+    booking_revenue = Decimal(str(booking_revenue or 0))
+    invoice_revenue = Decimal(str(invoice_revenue or 0))
+    collected_revenue = Decimal(str(collected_revenue or 0))
+    refunded_revenue = Decimal(str(refunded_revenue or 0))
+    net_revenue = Decimal(str(net_revenue or 0))
     most_booked = db.execute(
         select(Service.name, func.count(Booking.id).label("count"))
         .join(Booking, Booking.service_id == Service.id)
@@ -353,6 +461,11 @@ def dashboard_stats(db: Session) -> dict:
         "confirmed_bookings": count_status(BookingStatus.confirmed),
         "completed_bookings": count_status(BookingStatus.completed),
         "cancelled_bookings": count_status(BookingStatus.cancelled),
-        "total_revenue": revenue,
+        "total_revenue": net_revenue,
+        "booking_revenue": booking_revenue,
+        "invoice_revenue": invoice_revenue,
+        "collected_revenue": collected_revenue,
+        "refunded_revenue": refunded_revenue,
+        "net_revenue": net_revenue,
         "most_booked_services": [{"service": name, "count": count} for name, count in most_booked],
     }

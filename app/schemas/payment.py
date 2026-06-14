@@ -10,6 +10,7 @@ class PaymentCreate(ORMModel):
     booking_id: int | None = None
     invoice_id: int | None = None
     amount: Decimal = Field(gt=0)
+    refund_amount: Decimal = Field(default=Decimal("0.00"), ge=0)
     payment_method: PaymentMethod = PaymentMethod.pay_at_clinic
     payment_status: PaymentStatus = PaymentStatus.unpaid
     transaction_id: str | None = None
@@ -19,6 +20,7 @@ class PaymentUpdate(ORMModel):
     booking_id: int | None = None
     invoice_id: int | None = None
     amount: Decimal | None = Field(default=None, gt=0)
+    refund_amount: Decimal | None = Field(default=None, ge=0)
     payment_method: PaymentMethod | None = None
     payment_status: PaymentStatus | None = None
     transaction_id: str | None = None

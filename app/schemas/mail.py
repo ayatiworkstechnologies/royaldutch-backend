@@ -1,5 +1,6 @@
 from app.models.enums import MailStatus
 from app.schemas.common import ORMModel, Timestamped
+from datetime import datetime
 
 
 class MailMessageCreate(ORMModel):
@@ -15,6 +16,10 @@ class MailMessageCreate(ORMModel):
     status: MailStatus = MailStatus.draft
     provider_message_id: str | None = None
     error_message: str | None = None
+    retry_count: int = 0
+    last_attempt_at: datetime | None = None
+    locked_at: datetime | None = None
+    lock_token: str | None = None
 
 
 class MailMessageUpdate(ORMModel):
@@ -30,6 +35,10 @@ class MailMessageUpdate(ORMModel):
     status: MailStatus | None = None
     provider_message_id: str | None = None
     error_message: str | None = None
+    retry_count: int | None = None
+    last_attempt_at: datetime | None = None
+    locked_at: datetime | None = None
+    lock_token: str | None = None
 
 
 class MailMessageRead(MailMessageCreate, Timestamped):

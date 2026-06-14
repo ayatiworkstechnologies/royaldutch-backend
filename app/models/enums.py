@@ -2,7 +2,12 @@ from enum import StrEnum
 
 
 class UserRole(StrEnum):
+    super_admin = "super_admin"
     admin = "admin"
+    receptionist = "receptionist"
+    doctor = "doctor"
+    accountant = "accountant"
+    marketing = "marketing"
     customer = "customer"
 
 
@@ -59,5 +64,6 @@ class NotificationStatus(StrEnum):
 class MailStatus(StrEnum):
     draft = "draft"
     queued = "queued"
+    processing = "processing"
     sent = "sent"
     failed = "failed"

@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import Enum, ForeignKey, Numeric, String, Text
+from sqlalchemy import Enum, ForeignKey, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -11,6 +11,7 @@ from app.models.mixins import TimestampMixin
 
 class Invoice(TimestampMixin, Base):
     __tablename__ = "invoices"
+    __table_args__ = (UniqueConstraint("booking_id", name="uq_invoices_booking_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     invoice_number: Mapped[str] = mapped_column(String(40), unique=True, index=True, nullable=False)

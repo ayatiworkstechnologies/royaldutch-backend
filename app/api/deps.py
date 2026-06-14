@@ -1,6 +1,7 @@
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
+from fastapi import Request
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
@@ -15,7 +16,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.api_v1_prefix}/auth/lo
 DbSession = Annotated[Session, Depends(get_db)]
 
 
-def get_current_user(db: DbSession, token: Annotated[str, Depends(oauth2_scheme)]) -> User:
+def get_current_user(request: Request, db: DbSession, token: Annotated[str, Depends(oauth2_scheme)]) -> User:
     credentials_error = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -32,10 +33,11 @@ def get_current_user(db: DbSession, token: Annotated[str, Depends(oauth2_scheme)
     user = db.get(User, int(user_id))
     if not user or not user.is_active:
         raise credentials_error
+    request.state.user_id = user.id
     return user
 
 def get_current_admin(user: Annotated[User, Depends(get_current_user)]) -> User:
-    if user.role != UserRole.admin:
+    if user.role not in {UserRole.admin, UserRole.super_admin}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions",

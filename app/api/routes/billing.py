@@ -1,50 +1,23 @@
-from datetime import date
-from decimal import Decimal
-from uuid import uuid4
-
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
-from app.api.deps import DbSession, get_current_admin
-from app.models.billing import Invoice, InvoiceItem
+from app.api.deps import DbSession, get_current_user
+from app.core.permissions import require_permission
+from app.models.billing import Invoice
 from app.models.booking import Booking
 from app.models.enums import MailStatus
-from app.models.enums import InvoiceStatus
+from app.models.user import User
 from app.schemas.billing import InvoiceCreate, InvoiceFromBookingCreate, InvoiceRead, InvoiceUpdate
+from app.services.billing_service import create_invoice_from_booking_with_retry, create_invoice_with_retry, update_invoice_values
+from app.services.audit_service import model_snapshot, write_audit_log
 from app.services.invoice_pdf_service import generate_invoice_pdf, invoice_pdf_filename
 from app.services.mail_service import create_invoice_mail
 from app.services.settings_service import get_clinic_settings
 from app.services.smtp_service import send_mail_message
+from app.utils.pagination import paginate_query
 
-router = APIRouter(prefix="/billing", tags=["billing"], dependencies=[Depends(get_current_admin)])
-
-
-def invoice_number() -> str:
-    return f"INV-{date.today():%y%m%d}-{uuid4().hex[:5].upper()}"
-
-
-def apply_items(invoice: Invoice, items_data) -> None:
-    invoice.items = [
-        InvoiceItem(
-            description=item.description,
-            quantity=item.quantity,
-            unit_price=item.unit_price,
-            line_total=item.unit_price * item.quantity,
-        )
-        for item in items_data
-    ]
-
-
-def recalculate(invoice: Invoice) -> None:
-    subtotal = sum((item.line_total for item in invoice.items), Decimal("0"))
-    invoice.subtotal = subtotal
-    invoice.total_amount = subtotal - invoice.discount_amount + invoice.tax_amount
-    invoice.balance_due = invoice.total_amount - invoice.paid_amount
-    if invoice.balance_due <= 0 and invoice.total_amount > 0:
-        invoice.status = InvoiceStatus.paid
-    elif invoice.paid_amount > 0 and invoice.balance_due > 0:
-        invoice.status = InvoiceStatus.partially_paid
+router = APIRouter(prefix="/billing", tags=["billing"], dependencies=[Depends(require_permission("billing.manage"))])
 
 
 def invoice_detail_query():
@@ -56,9 +29,14 @@ def invoice_detail_query():
     )
 
 
-@router.get("", response_model=list[InvoiceRead])
-def list_invoices(db: DbSession) -> list[Invoice]:
-    return list(db.scalars(invoice_detail_query().order_by(Invoice.created_at.desc())).unique().all())
+@router.get("", response_model=None)
+def list_invoices(db: DbSession, page: int | None = Query(default=None), limit: int | None = Query(default=None)):
+    query = invoice_detail_query().order_by(Invoice.created_at.desc())
+    if page is not None and limit is not None:
+        result = paginate_query(db, query, page, limit)
+        result["items"] = [InvoiceRead.model_validate(item).model_dump(mode="json") for item in result["items"]]
+        return result
+    return [InvoiceRead.model_validate(item).model_dump(mode="json") for item in db.scalars(query).unique().all()]
 
 
 @router.get("/{invoice_id}", response_model=InvoiceRead)
@@ -70,18 +48,15 @@ def get_invoice(invoice_id: int, db: DbSession) -> Invoice:
 
 
 @router.post("", response_model=InvoiceRead)
-def create_invoice(data: InvoiceCreate, db: DbSession) -> Invoice:
-    invoice = Invoice(**data.model_dump(exclude={"items"}), invoice_number=invoice_number())
-    apply_items(invoice, data.items)
-    recalculate(invoice)
-    db.add(invoice)
+def create_invoice(data: InvoiceCreate, db: DbSession, request: Request, user: User = Depends(get_current_user)) -> Invoice:
+    invoice = create_invoice_with_retry(db, data)
+    write_audit_log(db, action="invoice.create", entity_type="Invoice", entity_id=invoice.id, user=user, request=request, new_value=model_snapshot(invoice))
     db.commit()
-    db.refresh(invoice)
     return invoice
 
 
 @router.post("/from-booking/{booking_id}", response_model=InvoiceRead)
-def create_invoice_from_booking(booking_id: int, data: InvoiceFromBookingCreate, db: DbSession) -> Invoice:
+def create_invoice_from_booking(booking_id: int, data: InvoiceFromBookingCreate, db: DbSession, request: Request, user: User = Depends(get_current_user)) -> Invoice:
     booking = db.scalar(
         select(Booking)
         .where(Booking.id == booking_id)
@@ -94,60 +69,33 @@ def create_invoice_from_booking(booking_id: int, data: InvoiceFromBookingCreate,
     if existing:
         return existing
 
-    unit_price = booking.price or Decimal("0")
-    invoice = Invoice(
-        invoice_number=invoice_number(),
-        booking_id=booking.id,
-        patient_id=booking.patient_id,
-        issue_date=date.today(),
-        due_date=data.due_date,
-        discount_amount=data.discount_amount,
-        tax_amount=data.tax_amount,
-        paid_amount=Decimal("0"),
-        currency=booking.currency,
-        status=InvoiceStatus.issued,
-        notes=data.notes,
-    )
-    invoice.items = [
-        InvoiceItem(
-            description=booking.service.name if booking.service else "Clinic service",
-            quantity=1,
-            unit_price=unit_price,
-            line_total=unit_price,
-        )
-    ]
-    recalculate(invoice)
-    if invoice.status == InvoiceStatus.draft:
-        invoice.status = InvoiceStatus.issued
-    db.add(invoice)
+    invoice = create_invoice_from_booking_with_retry(db, booking, data)
+    write_audit_log(db, action="invoice.create", entity_type="Invoice", entity_id=invoice.id, user=user, request=request, new_value=model_snapshot(invoice))
     db.commit()
-    db.refresh(invoice)
     return invoice
 
 
 @router.patch("/{invoice_id}", response_model=InvoiceRead)
-def update_invoice(invoice_id: int, data: InvoiceUpdate, db: DbSession) -> Invoice:
+def update_invoice(invoice_id: int, data: InvoiceUpdate, db: DbSession, request: Request, user: User = Depends(get_current_user)) -> Invoice:
     invoice = db.scalar(select(Invoice).where(Invoice.id == invoice_id).options(joinedload(Invoice.items)))
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
+    old_value = model_snapshot(invoice)
 
-    update_data = data.model_dump(exclude_unset=True, exclude={"items"})
-    for field, value in update_data.items():
-        setattr(invoice, field, value)
-    if data.items is not None:
-        apply_items(invoice, data.items)
-    recalculate(invoice)
+    invoice = update_invoice_values(db, invoice, data)
+    write_audit_log(db, action="invoice.update", entity_type="Invoice", entity_id=invoice.id, user=user, request=request, old_value=old_value, new_value=model_snapshot(invoice))
     db.commit()
-    db.refresh(invoice)
     return invoice
 
 
 @router.delete("/{invoice_id}")
-def delete_invoice(invoice_id: int, db: DbSession) -> dict:
+def delete_invoice(invoice_id: int, db: DbSession, request: Request, user: User = Depends(get_current_user)) -> dict:
     invoice = db.get(Invoice, invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
+    old_value = model_snapshot(invoice)
     db.delete(invoice)
+    write_audit_log(db, action="invoice.delete", entity_type="Invoice", entity_id=invoice_id, user=user, request=request, old_value=old_value)
     db.commit()
     return {"message": "Invoice deleted"}
 
@@ -182,7 +130,7 @@ def download_invoice_pdf(invoice_id: int, db: DbSession) -> Response:
 
 
 @router.post("/{invoice_id}/send")
-def send_invoice_email(invoice_id: int, db: DbSession, attach_pdf: bool = True) -> dict:
+def send_invoice_email(invoice_id: int, db: DbSession, request: Request, attach_pdf: bool = True, user: User = Depends(get_current_user)) -> dict:
     invoice = db.scalar(invoice_detail_query().where(Invoice.id == invoice_id))
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
@@ -201,5 +149,6 @@ def send_invoice_email(invoice_id: int, db: DbSession, attach_pdf: bool = True) 
         )
     send_mail_message(mail, attachments=attachments)
     db.add(mail)
+    write_audit_log(db, action="invoice.send", entity_type="Invoice", entity_id=invoice.id, user=user, request=request, new_value={"mail_status": mail.status, "attach_pdf": attach_pdf})
     db.commit()
     return {"message": "Invoice email processed", "status": mail.status, "error_message": mail.error_message}

@@ -1,15 +1,19 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
-from app.api.deps import DbSession, get_current_admin, get_current_user
+from app.api.deps import DbSession, get_current_user
+from app.core.permissions import require_permission
 from app.models.booking import Booking
 from app.models.enums import BookingStatus, MailStatus
 from app.schemas.booking import BookingCreate, BookingDetail, BookingRead, BookingStatusUpdate, BookingUpdate
 from app.services.booking_service import available_slots, create_booking, update_booking, update_booking_status as set_booking_status
 from app.services.mail_service import create_booking_mail, template_for_status
+from app.services.audit_service import model_snapshot, write_audit_log
+from app.models.user import User
+from app.utils.pagination import paginate_query
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
 
@@ -22,22 +26,32 @@ def to_booking_detail(booking: Booking) -> BookingDetail:
 
 
 @router.post("", response_model=BookingRead)
-def create_patient_booking(data: BookingCreate, db: DbSession) -> Booking:
-    return create_booking(db, data)
+def create_patient_booking(data: BookingCreate, db: DbSession, request: Request) -> Booking:
+    booking = create_booking(db, data)
+    write_audit_log(db, action="booking.create", entity_type="Booking", entity_id=booking.id, request=request, new_value=model_snapshot(booking))
+    db.commit()
+    return booking
 
 
-@router.get("", response_model=list[BookingDetail], dependencies=[Depends(get_current_admin)])
+@router.get("", response_model=None, dependencies=[Depends(require_permission("bookings.read"))])
 def list_bookings(
     db: DbSession,
     status: BookingStatus | None = Query(default=None),
     booking_date: date | None = Query(default=None),
-) -> list[BookingDetail]:
+    page: int | None = Query(default=None),
+    limit: int | None = Query(default=None),
+):
     query = select(Booking).options(joinedload(Booking.patient), joinedload(Booking.service), joinedload(Booking.staff))
     if status:
         query = query.where(Booking.status == status)
     if booking_date:
         query = query.where(Booking.booking_date == booking_date)
-    bookings = db.scalars(query.order_by(Booking.booking_date.desc(), Booking.booking_time.desc())).unique().all()
+    query = query.order_by(Booking.booking_date.desc(), Booking.booking_time.desc())
+    if page is not None and limit is not None:
+        result = paginate_query(db, query, page, limit)
+        result["items"] = [to_booking_detail(booking) for booking in result["items"]]
+        return result
+    bookings = db.scalars(query).unique().all()
     return [to_booking_detail(booking) for booking in bookings]
 
 
@@ -75,7 +89,7 @@ def my_bookings(db: DbSession, user=Depends(get_current_user)) -> list[BookingDe
     return [to_booking_detail(booking) for booking in bookings]
 
 
-@router.get("/calendar", response_model=list[BookingDetail], dependencies=[Depends(get_current_admin)])
+@router.get("/calendar", response_model=list[BookingDetail], dependencies=[Depends(require_permission("bookings.read"))])
 def calendar_bookings(
     db: DbSession,
     start_date: date = Query(...),
@@ -94,7 +108,7 @@ def calendar_bookings(
     return [to_booking_detail(booking) for booking in bookings]
 
 
-@router.get("/{booking_id}", response_model=BookingDetail, dependencies=[Depends(get_current_admin)])
+@router.get("/{booking_id}", response_model=BookingDetail, dependencies=[Depends(require_permission("bookings.read"))])
 def get_booking(booking_id: int, db: DbSession) -> BookingDetail:
     booking = db.scalar(
         select(Booking)
@@ -106,16 +120,20 @@ def get_booking(booking_id: int, db: DbSession) -> BookingDetail:
     return to_booking_detail(booking)
 
 
-@router.patch("/{booking_id}", response_model=BookingRead, dependencies=[Depends(get_current_admin)])
-def patch_booking(booking_id: int, data: BookingUpdate, db: DbSession) -> Booking:
+@router.patch("/{booking_id}", response_model=BookingRead, dependencies=[Depends(require_permission("bookings.manage"))])
+def patch_booking(booking_id: int, data: BookingUpdate, db: DbSession, request: Request, user: User = Depends(get_current_user)) -> Booking:
     booking = db.get(Booking, booking_id)
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
-    return update_booking(db, booking, data)
+    old_value = model_snapshot(booking)
+    booking = update_booking(db, booking, data)
+    write_audit_log(db, action="booking.update", entity_type="Booking", entity_id=booking.id, user=user, request=request, old_value=old_value, new_value=model_snapshot(booking))
+    db.commit()
+    return booking
 
 
-@router.patch("/{booking_id}/status", response_model=BookingRead, dependencies=[Depends(get_current_admin)])
-def update_booking_status(booking_id: int, data: BookingStatusUpdate, db: DbSession) -> Booking:
+@router.patch("/{booking_id}/status", response_model=BookingRead, dependencies=[Depends(require_permission("bookings.manage"))])
+def update_booking_status(booking_id: int, data: BookingStatusUpdate, db: DbSession, request: Request, user: User = Depends(get_current_user)) -> Booking:
     booking = db.scalar(
         select(Booking)
         .where(Booking.id == booking_id)
@@ -123,6 +141,7 @@ def update_booking_status(booking_id: int, data: BookingStatusUpdate, db: DbSess
     )
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
+    old_value = model_snapshot(booking)
     set_booking_status(db, booking, data.status)
     template = template_for_status(data.status)
     if template:
@@ -131,10 +150,13 @@ def update_booking_status(booking_id: int, data: BookingStatusUpdate, db: DbSess
             db.add(mail)
     db.commit()
     db.refresh(booking)
+    action = f"booking.{data.status}"
+    write_audit_log(db, action=action, entity_type="Booking", entity_id=booking.id, user=user, request=request, old_value=old_value, new_value=model_snapshot(booking))
+    db.commit()
     return booking
 
 
-@router.post("/{booking_id}/mail/{template}", dependencies=[Depends(get_current_admin)])
+@router.post("/{booking_id}/mail/{template}", dependencies=[Depends(require_permission("mail.manage"))])
 def queue_booking_mail(booking_id: int, template: str, db: DbSession) -> dict:
     allowed_templates = {"created", "confirmed", "cancelled", "completed", "reminder"}
     if template not in allowed_templates:
