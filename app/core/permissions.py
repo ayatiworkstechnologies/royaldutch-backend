@@ -18,10 +18,11 @@ ROLE_PERMISSIONS = {
         "mail.manage",
         "notifications.manage",
         "dashboard.read",
+        "reports.read",
     },
-    UserRole.doctor: {"bookings.read", "patients.read", "dashboard.read"},
-    UserRole.accountant: {"billing.manage", "payments.manage", "patients.read", "dashboard.read"},
-    UserRole.marketing: {"mail.manage", "email_templates.manage", "notifications.manage", "dashboard.read"},
+    UserRole.doctor: {"bookings.read", "patients.read", "dashboard.read", "reports.read"},
+    UserRole.accountant: {"billing.manage", "payments.manage", "patients.read", "dashboard.read", "reports.read"},
+    UserRole.marketing: {"mail.manage", "email_templates.manage", "notifications.manage", "dashboard.read", "reports.read"},
     UserRole.customer: {"account.read", "account.update"},
 }
 

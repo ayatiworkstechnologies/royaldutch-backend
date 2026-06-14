@@ -8,10 +8,13 @@ from app.models.email_template import EmailTemplate
 from app.models.notification import Notification
 from app.models.mail import MailMessage
 from app.models.patient import Patient
+from app.models.patient_document import PatientDocument
 from app.models.payment import Payment
+from app.models.refresh_token import RefreshToken
 from app.models.service import Service
 from app.models.setting import ClinicSetting
 from app.models.staff import Staff, StaffAvailability, staff_services
+from app.models.whatsapp import WhatsAppMessage
 
 __all__ = [
     "User",
@@ -26,10 +29,13 @@ __all__ = [
     "Notification",
     "MailMessage",
     "Patient",
+    "PatientDocument",
     "Payment",
+    "RefreshToken",
     "Service",
     "ClinicSetting",
     "Staff",
     "StaffAvailability",
     "staff_services",
+    "WhatsAppMessage",
 ]

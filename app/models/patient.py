@@ -20,3 +20,4 @@ class Patient(TimestampMixin, Base):
 
     bookings = relationship("Booking", back_populates="patient")
     user = relationship("User", back_populates="patient")
+    patient_documents = relationship("PatientDocument", back_populates="patient", cascade="all, delete-orphan")

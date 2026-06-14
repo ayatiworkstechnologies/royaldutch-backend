@@ -14,18 +14,24 @@ FastAPI + MySQL backend for the Royal Dutch Medical Centre booking, admin, billi
 ## Main Modules
 
 - Service categories and service CRUD
+- Admin user management
 - Royal Dutch service master data seed
 - Staff, assigned services and weekly availability
 - Patient appointment booking
+- Patient document metadata management
 - Booking slot generation and blocking
 - Admin booking approval and status flow
 - Patient records and booking history
 - Billing invoices and invoice items
 - Payments linked to invoices
 - SMTP mail queue
+- WhatsApp notification integration layer
 - Email templates with placeholders
 - Notifications queue
+- Advanced reporting
 - Dashboard statistics
+- Refresh-token authentication
+- Structured JSON request logs with request, correlation, and trace IDs
 
 ## Booking Code Format
 
@@ -124,6 +130,55 @@ API docs:
 
 - Swagger: `http://127.0.0.1:8000/docs`
 - Health: `http://127.0.0.1:8000/health`
+
+## Enterprise Hardening Additions
+
+Additional production-ready modules:
+
+- Refresh tokens: `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`
+- Patient documents: `GET/POST/PATCH/DELETE /api/v1/patients/{patient_id}/documents`
+- WhatsApp: `POST /api/v1/whatsapp/send`, `POST /api/v1/whatsapp/notifications/{notification_id}/send`
+- Reports: `GET /api/v1/reports/summary`, `GET /api/v1/reports/operations`
+- Admin users: `GET/POST/PATCH/DELETE /api/v1/admin/users`
+
+New database tables:
+
+- `refresh_tokens`
+- `patient_documents`
+- `whatsapp_messages`
+
+Migration validation:
+
+```powershell
+python scripts/validate_migrations.py
+```
+
+Strict Alembic autogenerate drift detection can be enabled when legacy schema/index differences have been reconciled:
+
+```powershell
+$env:STRICT_MIGRATION_CHECK="true"
+python scripts/validate_migrations.py
+```
+
+Production launch scripts:
+
+```powershell
+.\scripts\deploy_production.ps1
+```
+
+```bash
+./scripts/deploy_production.sh
+```
+
+Every HTTP response includes:
+
+```text
+X-Request-ID
+X-Correlation-ID
+X-Trace-ID
+```
+
+Logs are emitted as JSON from `app.core.logging`.
 
 ## Default Admin
 

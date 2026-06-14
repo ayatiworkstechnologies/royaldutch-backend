@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     database_ssl_verify_identity: bool = False
     secret_key: str = "change-this-secret-key"
     access_token_expire_minutes: int = 1440
+    refresh_token_expire_days: int = 30
     backend_cors_origins: str = ""
     backend_cors_origin_regex: str = r"https://.*\.vercel\.app"
     smtp_host: str = ""
@@ -29,6 +30,11 @@ class Settings(BaseSettings):
     run_startup_seeders: bool = True
     enable_in_process_worker: bool = False
     redis_url: str = ""
+    patient_document_storage_dir: str = "patient_documents"
+    whatsapp_provider: str = "noop"
+    whatsapp_api_url: str = ""
+    whatsapp_api_token: str = ""
+    whatsapp_from_number: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

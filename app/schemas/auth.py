@@ -34,3 +34,8 @@ class TokenResponse(ORMModel):
     role: str | None = None
     name: str | None = None
     email: str | None = None
+    refresh_token: str | None = None
+
+
+class RefreshTokenRequest(ORMModel):
+    refresh_token: str

@@ -1,0 +1,52 @@
+name: Backend CI
+
+on:
+  push:
+    paths:
+      - "**"
+  pull_request:
+    paths:
+      - "**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: royaldutch_ci
+        ports:
+          - "3306:3306"
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      DATABASE_URL: mysql+pymysql://root:root@127.0.0.1:3306/royaldutch_ci
+      SECRET_KEY: ci-secret-key-not-for-production
+      SMTP_HOST: ""
+      SMTP_FROM_EMAIL: ""
+      SMTP_USERNAME: ""
+      SMTP_USER: ""
+      SMTP_PASSWORD: ""
+      APP_ENV: local
+      RUN_STARTUP_SEEDERS: "false"
+      ENABLE_IN_PROCESS_WORKER: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+      - name: Validate Alembic migration on MySQL
+        run: python scripts/validate_migrations.py
+      - name: Validate downgrade/upgrade cycle on MySQL
+        run: alembic downgrade 20260613_0001 && alembic upgrade head
+      - name: Run tests
+        env:
+          DATABASE_URL: sqlite:////tmp/royaldutch_ci_tests.db
+        run: pytest

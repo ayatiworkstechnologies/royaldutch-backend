@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
+import hashlib
 import random
+import secrets
 
 from fastapi import HTTPException, Request, status
 from sqlalchemy import select
@@ -12,6 +14,7 @@ from app.models.auth_otp import AuthOtp
 from app.models.enums import MailStatus, UserRole
 from app.models.mail import MailMessage
 from app.models.patient import Patient
+from app.models.refresh_token import RefreshToken
 from app.models.user import User
 from app.schemas.auth import GoogleLoginRequest, LoginRequest, OtpRequest, OtpVerifyRequest, RegisterRequest, TokenResponse
 from app.seed.clinic_data import seed_database
@@ -23,8 +26,34 @@ DEFAULT_ADMIN_EMAIL = "admin@royaldutch.ae"
 OTP_EXPIRE_MINUTES = 10
 
 
-def customer_token_response(user: User) -> TokenResponse:
-    return TokenResponse(access_token=create_access_token(user.id), role=user.role, name=user.name, email=user.email)
+def token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def create_refresh_token(db: Session, user: User, request: Request | None = None) -> str:
+    settings = get_settings()
+    raw_token = secrets.token_urlsafe(48)
+    db.add(
+        RefreshToken(
+            user_id=user.id,
+            token_hash=token_hash(raw_token),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days),
+            created_by_ip=request.client.host if request and request.client else None,
+            user_agent=request.headers.get("user-agent") if request else None,
+        )
+    )
+    return raw_token
+
+
+def customer_token_response(user: User, db: Session | None = None, request: Request | None = None) -> TokenResponse:
+    refresh_token = create_refresh_token(db, user, request) if db else None
+    return TokenResponse(
+        access_token=create_access_token(user.id),
+        role=user.role,
+        name=user.name,
+        email=user.email,
+        refresh_token=refresh_token,
+    )
 
 
 def get_or_create_customer(db: Session, email: str, name: str | None = None) -> User:
@@ -86,7 +115,9 @@ def login_with_password(db: Session, data: LoginRequest, request: Request) -> To
     if user.role in {UserRole.admin, UserRole.super_admin}:
         write_audit_log(db, action="auth.admin_login", entity_type="User", entity_id=user.id, user=user, request=request)
         db.commit()
-    return customer_token_response(user)
+    token_response = customer_token_response(user, db, request)
+    db.commit()
+    return token_response
 
 
 def register_customer(db: Session, data: RegisterRequest) -> TokenResponse:
@@ -125,7 +156,9 @@ def register_customer(db: Session, data: RegisterRequest) -> TokenResponse:
 
     db.commit()
     db.refresh(user)
-    return customer_token_response(user)
+    response = customer_token_response(user, db)
+    db.commit()
+    return response
 
 
 def request_otp_code(db: Session, data: OtpRequest, request: Request) -> dict:
@@ -192,7 +225,9 @@ def verify_otp_code(db: Session, data: OtpVerifyRequest, request: Request) -> To
     upsert_customer_patient(db, user, data.name, data.phone)
     db.commit()
     db.refresh(user)
-    return customer_token_response(user)
+    response = customer_token_response(user, db, request)
+    db.commit()
+    return response
 
 
 def google_login_customer(db: Session, data: GoogleLoginRequest) -> TokenResponse:
@@ -221,7 +256,45 @@ def google_login_customer(db: Session, data: GoogleLoginRequest) -> TokenRespons
     link_patient_by_email(db, user)
     db.commit()
     db.refresh(user)
-    return customer_token_response(user)
+    response = customer_token_response(user, db)
+    db.commit()
+    return response
+
+
+def refresh_access_token(db: Session, refresh_token: str, request: Request | None = None) -> TokenResponse:
+    stored = db.scalar(select(RefreshToken).where(RefreshToken.token_hash == token_hash(refresh_token)))
+    now = datetime.now(timezone.utc)
+    if not stored or stored.revoked_at is not None:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+    expires_at = stored.expires_at if stored.expires_at.tzinfo else stored.expires_at.replace(tzinfo=timezone.utc)
+    if expires_at < now:
+        raise HTTPException(status_code=401, detail="Refresh token expired")
+    user = db.get(User, stored.user_id)
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+    stored.revoked_at = now
+    new_raw = create_refresh_token(db, user, request)
+    db.flush()
+    replacement = db.scalar(select(RefreshToken).where(RefreshToken.token_hash == token_hash(new_raw)))
+    if replacement:
+        stored.replaced_by_token_id = replacement.id
+    db.commit()
+    return TokenResponse(
+        access_token=create_access_token(user.id),
+        role=user.role,
+        name=user.name,
+        email=user.email,
+        refresh_token=new_raw,
+    )
+
+
+def revoke_refresh_token(db: Session, refresh_token: str) -> dict:
+    stored = db.scalar(select(RefreshToken).where(RefreshToken.token_hash == token_hash(refresh_token)))
+    if stored and stored.revoked_at is None:
+        stored.revoked_at = datetime.now(timezone.utc)
+        db.commit()
+    return {"message": "Refresh token revoked"}
 
 
 def admin_status_payload(db: Session) -> dict:

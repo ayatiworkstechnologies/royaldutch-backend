@@ -8,6 +8,7 @@ from uuid import uuid4
 from fastapi import FastAPI, Request
 
 request_id_context: contextvars.ContextVar[str | None] = contextvars.ContextVar("request_id", default=None)
+correlation_id_context: contextvars.ContextVar[str | None] = contextvars.ContextVar("correlation_id", default=None)
 logger = logging.getLogger("royaldutch.api")
 
 
@@ -18,8 +19,9 @@ class JsonFormatter(logging.Formatter):
             "level": record.levelname,
             "message": record.getMessage(),
             "request_id": getattr(record, "request_id", None) or request_id_context.get(),
+            "correlation_id": getattr(record, "correlation_id", None) or correlation_id_context.get(),
         }
-        for key in ("method", "path", "status_code", "duration_ms", "user_id"):
+        for key in ("method", "path", "status_code", "duration_ms", "user_id", "trace_id"):
             value = getattr(record, key, None)
             if value is not None:
                 payload[key] = value
@@ -43,8 +45,14 @@ def add_request_logging_middleware(app: FastAPI) -> None:
     async def request_logging(request: Request, call_next):
         start = time.perf_counter()
         request_id = request.headers.get("x-request-id") or uuid4().hex
+        correlation_id = request.headers.get("x-correlation-id") or request_id
+        traceparent = request.headers.get("traceparent")
+        trace_id = traceparent.split("-")[1] if traceparent and "-" in traceparent else request_id
         request.state.request_id = request_id
+        request.state.correlation_id = correlation_id
+        request.state.trace_id = trace_id
         token = request_id_context.set(request_id)
+        correlation_token = correlation_id_context.set(correlation_id)
         response = None
         try:
             response = await call_next(request)
@@ -53,12 +61,16 @@ def add_request_logging_middleware(app: FastAPI) -> None:
             status_code = response.status_code if response else 500
             if response:
                 response.headers["X-Request-ID"] = request_id
+                response.headers["X-Correlation-ID"] = correlation_id
+                response.headers["X-Trace-ID"] = trace_id
             user_id = getattr(getattr(request, "state", None), "user_id", None)
             elapsed_ms = (time.perf_counter() - start) * 1000
             logger.info(
                 "request_complete",
                 extra={
                     "request_id": request_id,
+                    "correlation_id": correlation_id,
+                    "trace_id": trace_id,
                     "method": request.method,
                     "path": request.url.path,
                     "status_code": status_code,
@@ -67,3 +79,4 @@ def add_request_logging_middleware(app: FastAPI) -> None:
                 },
             )
             request_id_context.reset(token)
+            correlation_id_context.reset(correlation_token)
