@@ -39,3 +39,9 @@ class TokenResponse(ORMModel):
 
 class RefreshTokenRequest(ORMModel):
     refresh_token: str
+
+
+class PasswordResetRequest(ORMModel):
+    email: str
+    code: str
+    new_password: str

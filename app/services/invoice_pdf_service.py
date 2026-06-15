@@ -97,17 +97,17 @@ def generate_invoice_pdf(invoice: Invoice, settings: dict[str, str]) -> bytes:
     patient = invoice.patient or (invoice.booking.patient if invoice.booking else None)
     booking = invoice.booking
     status_text = invoice.status.replace("_", " ").upper()
-    dark = (0.05, 0.09, 0.16)
+    dark = (0.16, 0.13, 0.15)
     muted = (0.36, 0.43, 0.53)
-    teal = (0.06, 0.46, 0.43)
+    theme_accent = (0.478, 0.169, 0.408)
     white = (1, 1, 1)
     paid_badge = (0.91, 0.98, 0.95)
     due_badge = (1, 0.97, 0.88)
     commands = [
-        "0.965 0.976 0.988 rg 0 0 612 792 re f",
+        "0.988 0.984 0.976 rg 0 0 612 792 re f",
         "0.88 0.91 0.95 RG 1 w",
-        "0.055 0.094 0.165 rg 0 704 612 88 re f",
-        "0.06 0.46 0.43 rg 0 704 612 8 re f",
+        "0.478 0.169 0.408 rg 0 704 612 88 re f",
+        "0.761 0.651 0.380 rg 0 704 612 8 re f",
     ]
 
     add_text(commands, 44, 754, settings["clinic_name"], 21, "F2", white)
@@ -116,25 +116,25 @@ def generate_invoice_pdf(invoice: Invoice, settings: dict[str, str]) -> bytes:
     add_text(commands, 444, 754, "INVOICE", 27, "F2", white)
     add_text(commands, 444, 731, invoice.invoice_number, 10, "F2", (0.86, 0.91, 0.96))
     add_rect(commands, 444, 710, 114, 17, paid_badge if invoice.balance_due <= 0 else due_badge)
-    add_text(commands, 452, 715, status_text, 8, "F2", teal if invoice.balance_due <= 0 else (0.65, 0.33, 0.02))
+    add_text(commands, 452, 715, status_text, 8, "F2", theme_accent if invoice.balance_due <= 0 else (0.65, 0.33, 0.02))
 
     add_rect(commands, 44, 592, 248, 82, (1, 1, 1))
     commands.append("0.88 0.91 0.95 RG 44 592 248 82 re S")
-    add_text(commands, 60, 650, "BILL TO", 9, "F2", teal)
+    add_text(commands, 60, 650, "BILL TO", 9, "F2", theme_accent)
     add_text(commands, 60, 631, patient.full_name if patient else "Patient", 13, "F2", dark)
     add_text(commands, 60, 613, patient.phone if patient else "", 9, "F1", muted)
     add_text(commands, 60, 599, patient.email if patient and patient.email else "", 9, "F1", muted)
 
     add_rect(commands, 320, 592, 248, 82, (1, 1, 1))
     commands.append("0.88 0.91 0.95 RG 320 592 248 82 re S")
-    add_text(commands, 336, 650, "INVOICE DETAILS", 9, "F2", teal)
+    add_text(commands, 336, 650, "INVOICE DETAILS", 9, "F2", theme_accent)
     add_text(commands, 336, 631, f"Issue Date: {invoice.issue_date}", 9, "F1", muted)
     add_text(commands, 336, 616, f"Due Date: {invoice.due_date or invoice.issue_date}", 9, "F1", muted)
     add_text(commands, 336, 601, f"Booking: {booking.booking_code if booking else '-'}", 9, "F1", muted)
     if settings.get("tax_registration_number"):
         add_text(commands, 336, 586, f"TRN: {settings['tax_registration_number']}", 9, "F1", muted)
 
-    add_rect(commands, 44, 544, 524, 28, teal)
+    add_rect(commands, 44, 544, 524, 28, theme_accent)
     add_text(commands, 60, 553, "DESCRIPTION", 9, "F2", white)
     add_text(commands, 326, 553, "QTY", 9, "F2", white)
     add_text(commands, 386, 553, "UNIT PRICE", 9, "F2", white)
@@ -164,7 +164,7 @@ def generate_invoice_pdf(invoice: Invoice, settings: dict[str, str]) -> bytes:
     for label, value in rows:
         font = "F2" if label in {"Total", "Balance Due"} else "F1"
         size = 11 if label == "Balance Due" else 9
-        row_color = teal if label == "Balance Due" else dark
+        row_color = theme_accent if label == "Balance Due" else dark
         add_text(commands, 352, total_y, label, size, font, row_color)
         add_text(commands, 462, total_y, money(value, invoice.currency), size, font, row_color)
         if label == "Total":
@@ -173,9 +173,9 @@ def generate_invoice_pdf(invoice: Invoice, settings: dict[str, str]) -> bytes:
 
     add_rect(commands, 44, 188, 248, 92, (1, 1, 1))
     commands.append("0.88 0.91 0.95 RG 44 188 248 92 re S")
-    add_text(commands, 60, 258, "PAYMENT SUMMARY", 9, "F2", teal)
+    add_text(commands, 60, 258, "PAYMENT SUMMARY", 9, "F2", theme_accent)
     add_text(commands, 60, 238, f"Paid: {money(invoice.paid_amount, invoice.currency)}", 10, "F1", muted)
-    add_text(commands, 60, 220, f"Balance Due: {money(invoice.balance_due, invoice.currency)}", 12, "F2", teal)
+    add_text(commands, 60, 220, f"Balance Due: {money(invoice.balance_due, invoice.currency)}", 12, "F2", theme_accent)
 
     add_text(commands, 44, 150, "Terms", 11, "F2", dark)
     add_wrapped_text(commands, 44, 133, settings["invoice_terms"], 95, 8, "F1", 13, muted)

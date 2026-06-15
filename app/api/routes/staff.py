@@ -31,9 +31,19 @@ def list_staff(db: DbSession) -> list[StaffRead]:
 
 @router.post("", response_model=StaffRead, dependencies=[Depends(require_permission("staff.manage"))])
 def create_staff(data: StaffCreate, db: DbSession, request: Request, user: User = Depends(get_current_user)) -> StaffRead:
+    from datetime import time
     staff = Staff(**data.model_dump(exclude={"service_ids", "availability"}))
     staff.services = list(db.scalars(select(Service).where(Service.id.in_(data.service_ids))).all())
-    staff.availability = [StaffAvailability(**item.model_dump()) for item in data.availability]
+    
+    if data.availability:
+        staff.availability = [StaffAvailability(**item.model_dump()) for item in data.availability]
+    else:
+        # Auto-assign Default Mon-Fri 9 AM to 5 PM
+        staff.availability = [
+            StaffAvailability(day_of_week=day, start_time=time(9, 0), end_time=time(17, 0))
+            for day in range(5)
+        ]
+        
     db.add(staff)
     db.commit()
     db.refresh(staff)

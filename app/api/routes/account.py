@@ -48,10 +48,14 @@ def profile_payload(user: User, patient: Patient | None) -> dict:
 
 
 def customer_invoice_query(user: User):
+    patient_ids_subquery = select(Patient.id).where((Patient.user_id == user.id) | (Patient.email == user.email)).scalar_subquery()
     return (
         select(Invoice)
-        .join(Patient, (Invoice.patient_id == Patient.id) | (Invoice.booking.has(Booking.patient_id == Patient.id)))
-        .where((Patient.user_id == user.id) | (Patient.email == user.email))
+        .outerjoin(Booking, Invoice.booking_id == Booking.id)
+        .where(
+            (Invoice.patient_id.in_(patient_ids_subquery)) |
+            (Booking.patient_id.in_(patient_ids_subquery))
+        )
         .options(
             joinedload(Invoice.items),
             joinedload(Invoice.patient),

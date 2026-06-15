@@ -12,8 +12,10 @@ from app.models.enums import InvoiceStatus
 from app.schemas.billing import InvoiceCreate, InvoiceFromBookingCreate, InvoiceUpdate
 
 
-def invoice_number() -> str:
-    return f"INV-{date.today():%y%m%d}-{uuid4().hex[:5].upper()}"
+def invoice_number(db: Session) -> str:
+    today_str = date.today().strftime("%y%m%d")
+    random_hex = uuid4().hex[:5].upper()
+    return f"INV-{today_str}-{random_hex}"
 
 
 def is_unique_invoice_number_error(exc: IntegrityError) -> bool:
@@ -46,7 +48,7 @@ def recalculate_invoice(invoice: Invoice) -> None:
 
 def create_invoice_with_retry(db: Session, data: InvoiceCreate) -> Invoice:
     for _ in range(3):
-        invoice = Invoice(**data.model_dump(exclude={"items"}), invoice_number=invoice_number())
+        invoice = Invoice(**data.model_dump(exclude={"items"}), invoice_number=invoice_number(db))
         apply_items(invoice, data.items)
         recalculate_invoice(invoice)
         db.add(invoice)
@@ -65,7 +67,7 @@ def create_invoice_from_booking_with_retry(db: Session, booking: Booking, data: 
     unit_price = booking.price or Decimal("0")
     for _ in range(3):
         invoice = Invoice(
-            invoice_number=invoice_number(),
+            invoice_number=invoice_number(db),
             booking_id=booking.id,
             patient_id=booking.patient_id,
             issue_date=date.today(),

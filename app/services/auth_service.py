@@ -230,6 +230,48 @@ def verify_otp_code(db: Session, data: OtpVerifyRequest, request: Request) -> To
     return response
 
 
+def reset_customer_password(db: Session, data: "PasswordResetRequest", request: Request) -> dict:
+    from app.schemas.auth import PasswordResetRequest
+    
+    email = data.email.lower().strip()
+    rate_limit(f"otp-verify:ip:{client_ip(request)}", 10, 10 * 60)
+    rate_limit(f"otp-verify:email:{email}", 5, 10 * 60)
+    
+    if len(data.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+        
+    otps = db.scalars(
+        select(AuthOtp)
+        .where(AuthOtp.email == email, AuthOtp.used == False)  # noqa: E712
+        .order_by(AuthOtp.created_at.desc())
+        .limit(5)
+    ).all()
+    
+    now = datetime.now(timezone.utc)
+    otp = next(
+        (
+            item
+            for item in otps
+            if (item.expires_at if item.expires_at.tzinfo else item.expires_at.replace(tzinfo=timezone.utc)) >= now
+            and verify_password(data.code, item.code_hash)
+        ),
+        None,
+    )
+    if not otp:
+        raise HTTPException(status_code=401, detail="Invalid or expired reset code")
+    
+    otp.used = True
+    
+    user = db.scalar(select(User).where(User.email == email))
+    if not user:
+        raise HTTPException(status_code=404, detail="User account not found. Please register instead.")
+        
+    user.hashed_password = hash_password(data.new_password)
+    db.commit()
+    
+    return {"message": "Password successfully reset"}
+
+
 def google_login_customer(db: Session, data: GoogleLoginRequest) -> TokenResponse:
     settings = get_settings()
 

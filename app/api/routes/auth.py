@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request, status
 
 from app.api.deps import DbSession
-from app.schemas.auth import GoogleLoginRequest, LoginRequest, OtpRequest, OtpVerifyRequest, RefreshTokenRequest, RegisterRequest, TokenResponse
+from app.schemas.auth import GoogleLoginRequest, LoginRequest, OtpRequest, OtpVerifyRequest, RefreshTokenRequest, RegisterRequest, TokenResponse, PasswordResetRequest
 from app.services.auth_service import (
     admin_status_payload,
     ensure_admin_seed,
@@ -35,6 +35,12 @@ def request_otp(data: OtpRequest, db: DbSession, request: Request) -> dict:
 @router.post("/otp/verify", response_model=TokenResponse)
 def verify_otp(data: OtpVerifyRequest, db: DbSession, request: Request) -> TokenResponse:
     return verify_otp_code(db, data, request)
+
+
+@router.post("/reset-password")
+def reset_password(data: PasswordResetRequest, db: DbSession, request: Request) -> dict:
+    from app.services.auth_service import reset_customer_password
+    return reset_customer_password(db, data, request)
 
 
 @router.post("/google", response_model=TokenResponse)
