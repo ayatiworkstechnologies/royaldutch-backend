@@ -1,4 +1,5 @@
 from collections.abc import Generator
+import os
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
@@ -12,7 +13,7 @@ settings = get_settings()
 def normalized_database_url():
     url = make_url(settings.sqlalchemy_database_url)
     unsupported_query_keys = {"sslaccept", "sslmode", "sslrootcert", "ssl_ca", "ssl_cert", "ssl_key", "ssl-mode"}
-    query = {key: value for key, value in url.query.items() if key.lower() not in unsupported_query_keys}
+    query = {key: value for key, value in url.query.items() if not (key.lower().startswith("ssl") or "ca" in key.lower())}
     return url.set(query=query)
 
 
@@ -23,7 +24,7 @@ if database_url.drivername.startswith("sqlite"):
     connect_args["check_same_thread"] = False
 if settings.database_ssl and database_url.drivername.startswith("mysql"):
     connect_args["ssl"] = {}
-    if settings.database_ssl_ca_path:
+    if settings.database_ssl_ca_path and os.path.isfile(settings.database_ssl_ca_path):
         connect_args["ssl_ca"] = settings.database_ssl_ca_path
     connect_args["ssl_verify_identity"] = settings.database_ssl_verify_identity
 
