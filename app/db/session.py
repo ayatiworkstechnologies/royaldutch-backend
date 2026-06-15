@@ -11,7 +11,7 @@ settings = get_settings()
 
 def normalized_database_url():
     url = make_url(settings.sqlalchemy_database_url)
-    unsupported_query_keys = {"sslaccept", "sslmode", "sslrootcert"}
+    unsupported_query_keys = {"sslaccept", "sslmode", "sslrootcert", "ssl_ca", "ssl_cert", "ssl_key", "ssl-mode"}
     query = {key: value for key, value in url.query.items() if key.lower() not in unsupported_query_keys}
     return url.set(query=query)
 
