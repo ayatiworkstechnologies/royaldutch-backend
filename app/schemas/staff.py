@@ -35,6 +35,7 @@ class StaffBase(ORMModel):
 
 
 class StaffCreate(StaffBase):
+    password: str | None = None
     service_ids: list[int] = Field(default_factory=list)
     availability: list[StaffAvailabilityCreate] = Field(default_factory=list)
 

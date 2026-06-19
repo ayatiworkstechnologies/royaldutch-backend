@@ -47,6 +47,7 @@ def profile_payload(user: User, patient: Patient | None) -> dict:
         "documents": patient.documents if patient else "",
         "role": user.role,
         "is_active": user.is_active,
+        "staff_id": user.staff_id,
     }
 
 

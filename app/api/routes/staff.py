@@ -4,8 +4,9 @@ from sqlalchemy.orm import joinedload
 
 from app.api.deps import DbSession, get_current_user
 from app.core.permissions import require_permission
+from app.core.security import hash_password
 from app.models.booking import Booking
-from app.models.enums import RecordStatus
+from app.models.enums import RecordStatus, UserRole
 from app.models.service import Service
 from app.models.staff import Staff, StaffAvailability
 from app.models.user import User
@@ -32,7 +33,7 @@ def list_staff(db: DbSession) -> list[StaffRead]:
 @router.post("", response_model=StaffRead, dependencies=[Depends(require_permission("staff.manage"))])
 def create_staff(data: StaffCreate, db: DbSession, request: Request, user: User = Depends(get_current_user)) -> StaffRead:
     from datetime import time
-    staff = Staff(**data.model_dump(exclude={"service_ids", "availability"}))
+    staff = Staff(**data.model_dump(exclude={"service_ids", "availability", "password"}))
     staff.services = list(db.scalars(select(Service).where(Service.id.in_(data.service_ids))).all())
     
     if data.availability:
@@ -45,6 +46,25 @@ def create_staff(data: StaffCreate, db: DbSession, request: Request, user: User 
         ]
         
     db.add(staff)
+    db.flush()  # get staff.id before linking
+
+    if data.email:
+        existing_user = db.scalar(select(User).where(User.email == data.email))
+        if existing_user:
+            existing_user.staff_id = staff.id
+        elif data.password:
+            role_val = data.role.lower()
+            valid_roles = [r.value for r in UserRole]
+            user_role = role_val if role_val in valid_roles else UserRole.doctor.value
+            new_user = User(
+                name=data.name,
+                email=data.email,
+                hashed_password=hash_password(data.password),
+                role=user_role,
+                staff_id=staff.id,
+            )
+            db.add(new_user)
+
     db.commit()
     db.refresh(staff)
     write_audit_log(db, action="staff.create", entity_type="Staff", entity_id=staff.id, user=user, request=request, new_value=model_snapshot(staff))

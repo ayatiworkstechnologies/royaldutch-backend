@@ -2,7 +2,7 @@ import argparse
 
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
-from app.seed.clinic_data import seed_admin, seed_categories_and_services, seed_database, seed_staff
+from app.seed.clinic_data import seed_admin, seed_categories_and_services, seed_database
 from app.services.email_template_service import seed_default_email_templates
 
 
@@ -12,8 +12,7 @@ def seed_login(db) -> None:
 
 
 def seed_services(db) -> None:
-    services = seed_categories_and_services(db)
-    seed_staff(db, services)
+    seed_categories_and_services(db)
     db.commit()
 
 

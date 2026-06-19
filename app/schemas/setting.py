@@ -4,6 +4,8 @@ from app.schemas.common import ORMModel
 class ClinicSettingsRead(ORMModel):
     clinic_name: str
     clinic_email: str
+    clinic_email_cc: str
+    clinic_email_bcc: str
     clinic_phone: str
     clinic_address: str
     invoice_footer: str
@@ -15,6 +17,8 @@ class ClinicSettingsRead(ORMModel):
 class ClinicSettingsUpdate(ORMModel):
     clinic_name: str | None = None
     clinic_email: str | None = None
+    clinic_email_cc: str | None = None
+    clinic_email_bcc: str | None = None
     clinic_phone: str | None = None
     clinic_address: str | None = None
     invoice_footer: str | None = None

@@ -8,20 +8,44 @@ from app.models.user import User
 
 
 ROLE_PERMISSIONS = {
+    # super_admin — full access (Admin in UI)
     UserRole.super_admin: {"*"},
-    UserRole.admin: {"*"},
-    UserRole.receptionist: {
-        "bookings.read",
-        "bookings.manage",
-        "patients.read",
-        "patients.manage",
-        "mail.manage",
-        "notifications.manage",
+
+    # admin — all operational access, view + update (Manager in UI)
+    UserRole.admin: {
         "dashboard.read",
         "reports.read",
+        "bookings.read", "bookings.manage",
+        "patients.read", "patients.manage",
+        "categories.read", "categories.manage",
+        "services.read", "services.manage",
+        "staff.read", "staff.manage",
+        "billing.read", "billing.manage",
+        "payments.read", "payments.manage",
+        "mail.read", "mail.manage",
+        "email_templates.read", "email_templates.manage",
+        "notifications.read", "notifications.manage",
+        "settings.read", "settings.manage",
+        "audit_logs.read",
     },
-    UserRole.doctor: {"bookings.read", "patients.read", "dashboard.read", "reports.read"},
-    UserRole.accountant: {"billing.manage", "payments.manage", "patients.read", "dashboard.read", "reports.read"},
+
+    # receptionist — booking workflow + billing + payments (Receptionist in UI)
+    UserRole.receptionist: {
+        "dashboard.read",
+        "bookings.read", "bookings.manage",
+        "patients.read", "patients.manage",
+        "billing.read", "billing.manage",
+        "payments.read", "payments.manage",
+        "notifications.manage",
+    },
+
+    UserRole.doctor:           {"bookings.read", "bookings.manage", "patients.read", "dashboard.read", "reports.read"},
+    UserRole.nurse:            {"bookings.read", "bookings.manage", "patients.read", "dashboard.read"},
+    UserRole.physiotherapist:  {"bookings.read", "bookings.manage", "patients.read", "dashboard.read"},
+    UserRole.dentist:          {"bookings.read", "bookings.manage", "patients.read", "dashboard.read"},
+    UserRole.laser_specialist: {"bookings.read", "bookings.manage", "patients.read", "dashboard.read"},
+    UserRole.facial_therapist: {"bookings.read", "bookings.manage", "patients.read", "dashboard.read"},
+    UserRole.accountant: {"billing.manage", "billing.read", "payments.manage", "payments.read", "patients.read", "dashboard.read", "reports.read"},
     UserRole.marketing: {"mail.manage", "email_templates.manage", "notifications.manage", "dashboard.read", "reports.read"},
     UserRole.customer: {"account.read", "account.update"},
 }

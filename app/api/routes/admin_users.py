@@ -13,7 +13,7 @@ from app.utils.pagination import paginate_query
 router = APIRouter(prefix="/admin/users", tags=["admin users"], dependencies=[Depends(require_permission("users.manage"))])
 
 
-@router.get("", response_model=None)
+@router.get("", response_model=list[AdminUserRead])
 def list_admin_users(db: DbSession, page: int | None = Query(default=None), limit: int | None = Query(default=None)):
     roles = [role.value for role in ADMIN_MANAGED_ROLES]
     query = select(User).where(User.role.in_(roles)).order_by(User.name)

@@ -8,6 +8,8 @@ from app.schemas.setting import ClinicSettingsUpdate
 DEFAULT_CLINIC_SETTINGS = {
     "clinic_name": "Royal Dutch Medical Centre",
     "clinic_email": "info@royaldutch.ae",
+    "clinic_email_cc": "",
+    "clinic_email_bcc": "",
     "clinic_phone": "+971 000 000 000",
     "clinic_address": "Dubai, United Arab Emirates",
     "invoice_footer": "Thank you for choosing Royal Dutch Medical Centre.",

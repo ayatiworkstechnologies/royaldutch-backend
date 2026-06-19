@@ -7,7 +7,12 @@ from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.admin_user import AdminUserCreate, AdminUserUpdate
 
-ADMIN_MANAGED_ROLES = {UserRole.super_admin, UserRole.admin, UserRole.receptionist, UserRole.doctor, UserRole.accountant, UserRole.marketing}
+ADMIN_MANAGED_ROLES = {
+    UserRole.super_admin, UserRole.admin, UserRole.receptionist,
+    UserRole.doctor, UserRole.nurse, UserRole.physiotherapist,
+    UserRole.dentist, UserRole.laser_specialist, UserRole.facial_therapist,
+    UserRole.accountant, UserRole.marketing,
+}
 
 
 def validate_admin_role(role: str) -> None:

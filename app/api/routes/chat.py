@@ -13,6 +13,8 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(..., min_length=1, max_length=20)
+    services: list[dict] = Field(default_factory=list)
+    categories: list[dict] = Field(default_factory=list)
 
 
 class ChatResponse(BaseModel):
@@ -22,5 +24,5 @@ class ChatResponse(BaseModel):
 @router.post("", response_model=ChatResponse)
 def chat(body: ChatRequest) -> ChatResponse:
     history = [{"role": m.role, "content": m.content} for m in body.messages]
-    reply = get_chat_response(history)
+    reply = get_chat_response(history, body.services, body.categories)
     return ChatResponse(reply=reply)

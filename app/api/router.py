@@ -20,6 +20,7 @@ from app.api.routes import (
     services,
     settings,
     staff,
+    staff_dashboard,
     whatsapp,
 )
 
@@ -43,4 +44,5 @@ api_router.include_router(mail.router)
 api_router.include_router(email_templates.router)
 api_router.include_router(notifications.router)
 api_router.include_router(dashboard.router)
+api_router.include_router(staff_dashboard.router)
 api_router.include_router(whatsapp.router)

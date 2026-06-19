@@ -2,13 +2,18 @@ from enum import StrEnum
 
 
 class UserRole(StrEnum):
-    super_admin = "super_admin"
-    admin = "admin"
-    receptionist = "receptionist"
-    doctor = "doctor"
-    accountant = "accountant"
-    marketing = "marketing"
-    customer = "customer"
+    super_admin      = "super_admin"
+    admin            = "admin"
+    receptionist     = "receptionist"
+    doctor           = "doctor"
+    nurse            = "nurse"
+    physiotherapist  = "physiotherapist"
+    dentist          = "dentist"
+    laser_specialist = "laser_specialist"
+    facial_therapist = "facial_therapist"
+    accountant       = "accountant"
+    marketing        = "marketing"
+    customer         = "customer"
 
 
 class RecordStatus(StrEnum):

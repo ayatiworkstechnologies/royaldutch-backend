@@ -1,5 +1,3 @@
-from datetime import time
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -7,7 +5,6 @@ from app.core.security import hash_password
 from app.models.category import Category
 from app.models.enums import RecordStatus, UserRole
 from app.models.service import Service
-from app.models.staff import Staff, StaffAvailability
 from app.models.user import User
 
 ROYAL_DUTCH_SERVICES = [
@@ -90,30 +87,29 @@ ROYAL_DUTCH_SERVICES = [
     },
 ]
 
-STAFF = [
-    ("Dr. Aisha", "Dermatologist", "PMU, skin treatments and consultation"),
-    ("Dr. Sana", "Laser Specialist", "Candela laser and slimming treatments"),
-    ("Dr. Farah", "Facial Therapist", "Facials, eyelashes and lightening treatments"),
-    ("Dr. Omar", "General Practitioner", "General medicine, wellness care and home consultations"),
-    ("Dr. Leena", "Dentist", "General dentistry, smile design and pediatric dentistry"),
-    ("Dr. Kareem", "Physiotherapist", "Rehabilitation, mobility recovery and pain management"),
-    ("Nurse Maryam", "Home Healthcare Coordinator", "Nursing care, elderly support and post-surgical follow-up"),
+
+
+_SEED_USERS = [
+    # (name, email, password, role)
+    ("Royal Dutch Admin",   "admin@royaldutch.ae",        "Admin@12345",        UserRole.super_admin),
+    ("Royal Dutch Manager", "manager@royaldutch.ae",      "Manager@12345",      UserRole.admin),
+    ("Royal Dutch Reception", "reception@royaldutch.ae",  "Reception@12345",    UserRole.receptionist),
 ]
 
 
 def seed_admin(db: Session) -> None:
-    email = "admin@royaldutch.ae"
-    admin = db.scalar(select(User).where(User.email == email))
-    if admin:
-        return
-    db.add(
-        User(
-            name="Royal Dutch Admin",
-            email=email,
-            hashed_password=hash_password("Admin@12345"),
-            role=UserRole.admin,
-        )
-    )
+    for name, email, password, role in _SEED_USERS:
+        user = db.scalar(select(User).where(User.email == email))
+        if user:
+            if user.role != role:
+                user.role = role
+        else:
+            db.add(User(
+                name=name,
+                email=email,
+                hashed_password=hash_password(password),
+                role=role,
+            ))
 
 
 def seed_categories_and_services(db: Session) -> list[Service]:
@@ -153,58 +149,10 @@ def seed_categories_and_services(db: Session) -> list[Service]:
     return services
 
 
-def seed_staff(db: Session, services: list[Service]) -> None:
-    all_services = {service.slug: service for service in services}
-    role_category_mapping = {
-        "Dermatologist": ["dermatology-aesthetic-medicine"],
-        "Laser Specialist": ["dermatology-aesthetic-medicine"],
-        "Facial Therapist": ["dermatology-aesthetic-medicine"],
-        "General Practitioner": ["general-medicine", "integrated-care-model"],
-        "Dentist": ["dentistry-department"],
-        "Physiotherapist": ["physiotherapy-rehabilitation"],
-        "Home Healthcare Coordinator": ["home-healthcare-division", "post-surgical-care-programs", "integrated-care-model"],
-    }
-
-    category_to_service_slugs = {
-        cat["slug"]: [svc["slug"] for svc in cat["services"]]
-        for cat in ROYAL_DUTCH_SERVICES
-    }
-    for name, role, specialization in STAFF:
-        staff = db.scalar(select(Staff).where(Staff.name == name))
-        if not staff:
-            staff = Staff(
-                name=name,
-                email=f"{name.lower().replace('dr. ', '').replace(' ', '.')}@royaldutch.ae",
-                phone="+971500000000",
-                role=role,
-                specialization=specialization,
-            )
-            db.add(staff)
-            db.flush()
-
-        assigned_slugs = []
-        for cat_slug in role_category_mapping.get(role, []):
-            assigned_slugs.extend(category_to_service_slugs.get(cat_slug, []))
-            
-        staff.services = [all_services[slug] for slug in assigned_slugs if slug in all_services]
-        if not staff.availability:
-            staff.availability = [
-                StaffAvailability(
-                    day_of_week=day,
-                    start_time=time(10, 0),
-                    end_time=time(18, 0),
-                    break_start_time=time(13, 0),
-                    break_end_time=time(14, 0),
-                )
-                for day in range(6)
-            ]
-
-
 def seed_database(db: Session) -> None:
     try:
         seed_admin(db)
-        services = seed_categories_and_services(db)
-        seed_staff(db, services)
+        seed_categories_and_services(db)
         db.commit()
     except Exception as exc:
         db.rollback()

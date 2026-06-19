@@ -399,24 +399,82 @@ def available_slots(db: Session, service_id: int, selected_date: date, staff_id:
     if staff_id:
         staff_query = staff_query.where(Staff.id == staff_id)
 
-    slots: set[str] = set()
-    for staff in db.scalars(staff_query).unique().all():
-        availability = db.scalar(
-            select(StaffAvailability).where(
-                StaffAvailability.staff_id == staff.id,
-                StaffAvailability.day_of_week == selected_date.weekday(),
-                StaffAvailability.status == RecordStatus.active,
-            )
+    staff_members = db.scalars(staff_query).unique().all()
+    if not staff_members:
+        return []
+        
+    staff_ids = [s.id for s in staff_members]
+    
+    # 1. Fetch all availabilities for these staff members for this day of week
+    availabilities = db.scalars(
+        select(StaffAvailability).where(
+            StaffAvailability.staff_id.in_(staff_ids),
+            StaffAvailability.day_of_week == selected_date.weekday(),
+            StaffAvailability.status == RecordStatus.active,
         )
+    ).all()
+    availability_by_staff = {a.staff_id: a for a in availabilities}
+    
+    # 2. Fetch all blocking bookings for these staff on this date
+    bookings = db.scalars(
+        select(Booking).where(
+            Booking.staff_id.in_(staff_ids),
+            Booking.booking_date == selected_date,
+            Booking.status.in_(BLOCKING_STATUSES),
+        )
+    ).all()
+    
+    bookings_by_staff = {}
+    for b in bookings:
+        bookings_by_staff.setdefault(b.staff_id, []).append(b)
+
+    slots: set[str] = set()
+    duration = service_duration_minutes(service)
+    
+    for staff in staff_members:
+        availability = availability_by_staff.get(staff.id)
         if not availability:
             continue
 
         cursor = datetime.combine(selected_date, availability.start_time)
         end_at = datetime.combine(selected_date, availability.end_time)
+        
+        work_end = end_at
+        break_start = datetime.combine(selected_date, availability.break_start_time) if availability.break_start_time else None
+        break_end = datetime.combine(selected_date, availability.break_end_time) if availability.break_end_time else None
+        
+        staff_bookings = bookings_by_staff.get(staff.id, [])
+        booked_intervals = []
+        for b in staff_bookings:
+            b_start = datetime.combine(selected_date, b.booking_time)
+            b_end = b_start + timedelta(minutes=b.duration_minutes or DEFAULT_SLOT_MINUTES)
+            booked_intervals.append((b_start, b_end))
+
         while cursor < end_at:
-            slot_time = cursor.time()
-            if slot_is_available(db, staff.id, selected_date, slot_time, service_duration_minutes(service)):
-                slots.add(slot_time.strftime("%H:%M"))
+            slot_start = cursor
+            slot_end = cursor + timedelta(minutes=duration)
+            
+            # Check work hours
+            if slot_end > work_end:
+                break
+                
+            is_free = True
+            
+            # Check break
+            if break_start and break_end:
+                if slot_start < break_end and slot_end > break_start:
+                    is_free = False
+            
+            # Check bookings
+            if is_free:
+                for b_start, b_end in booked_intervals:
+                    if slot_start < b_end and slot_end > b_start:
+                        is_free = False
+                        break
+                        
+            if is_free:
+                slots.add(slot_start.time().strftime("%H:%M"))
+                
             cursor += timedelta(minutes=30)
 
     return sorted(slots)
