@@ -9,8 +9,9 @@ from app.core.permissions import require_permission
 from app.models.booking import Booking
 from app.models.enums import BookingStatus, MailStatus
 from app.schemas.booking import BookingCreate, BookingDetail, BookingRead, BookingStatusUpdate, BookingUpdate
-from app.services.booking_service import available_slots, create_booking, update_booking, update_booking_status as set_booking_status
+from app.services.booking_service import available_slots, available_slots_range, create_booking, update_booking, update_booking_status as set_booking_status
 from app.services.mail_service import create_booking_mail, template_for_status
+from app.services.management_alert_service import send_booking_alerts
 from app.services.audit_service import model_snapshot, write_audit_log
 from app.models.user import User
 from app.utils.pagination import paginate_query
@@ -29,6 +30,8 @@ def to_booking_detail(booking: Booking) -> BookingDetail:
 def create_patient_booking(data: BookingCreate, db: DbSession, request: Request) -> Booking:
     booking = create_booking(db, data)
     write_audit_log(db, action="booking.create", entity_type="Booking", entity_id=booking.id, request=request, new_value=model_snapshot(booking))
+    db.commit()
+    send_booking_alerts(booking, db)
     db.commit()
     return booking
 
@@ -63,6 +66,18 @@ def get_available_slots(
     staff_id: int | None = Query(default=None),
 ) -> dict:
     return {"slots": available_slots(db, service_id, selected_date, staff_id)}
+
+
+@router.get("/slots/week")
+def get_slots_week(
+    db: DbSession,
+    service_id: int = Query(...),
+    start_date: date = Query(...),
+    days: int = Query(default=30, ge=1, le=31),
+    staff_id: int | None = Query(default=None),
+) -> dict:
+    """Return {date: {free, taken}} for up to 31 days — 3 DB queries total."""
+    return available_slots_range(db, service_id, start_date, days, staff_id)
 
 
 @router.get("/lookup", response_model=list[BookingDetail])

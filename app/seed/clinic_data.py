@@ -1,3 +1,5 @@
+from datetime import time
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -5,6 +7,7 @@ from app.core.security import hash_password
 from app.models.category import Category
 from app.models.enums import RecordStatus, UserRole
 from app.models.service import Service
+from app.models.staff import Staff, StaffAvailability
 from app.models.user import User
 
 ROYAL_DUTCH_SERVICES = [
@@ -149,10 +152,53 @@ def seed_categories_and_services(db: Session) -> list[Service]:
     return services
 
 
+STAFF_PROFILES: list[dict] = []
+
+
+def seed_staff(db: Session, services: list[Service]) -> None:
+    services_by_slug = {service.slug: service for service in services}
+
+    for profile in STAFF_PROFILES:
+        staff = db.scalar(select(Staff).where(Staff.email == profile["email"]))
+        if not staff:
+            staff = db.scalar(select(Staff).where(Staff.name == profile["name"]))
+        if not staff:
+            staff = Staff(
+                name=profile["name"],
+                email=profile["email"],
+                phone=profile["phone"],
+                role=profile["role"],
+                specialization=profile["specialization"],
+                status=RecordStatus.active,
+            )
+            db.add(staff)
+            db.flush()
+        else:
+            staff.name = profile["name"]
+            staff.phone = profile["phone"]
+            staff.role = profile["role"]
+            staff.specialization = profile["specialization"]
+            staff.status = RecordStatus.active
+
+        staff.services = [services_by_slug[slug] for slug in profile["service_slugs"] if slug in services_by_slug]
+
+        if not staff.availability:
+            staff.availability = [
+                StaffAvailability(
+                    day_of_week=day,
+                    start_time=time(9, 0),
+                    end_time=time(18, 0),
+                    break_start_time=time(13, 0),
+                    break_end_time=time(14, 0),
+                    status=RecordStatus.active,
+                )
+                for day in range(6)
+            ]
 def seed_database(db: Session) -> None:
     try:
         seed_admin(db)
-        seed_categories_and_services(db)
+        services = seed_categories_and_services(db)
+        seed_staff(db, services)
         db.commit()
     except Exception as exc:
         db.rollback()

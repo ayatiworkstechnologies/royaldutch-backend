@@ -189,7 +189,12 @@ def find_staff_for_booking(
     booking_date: date,
     booking_time: time,
     preferred_staff_id: int | None,
-) -> Staff:
+) -> Staff | None:
+    """
+    Return the best available staff member for this slot, or None if no staff
+    is configured yet (admin assigns later).  Never raises a 409 — slot
+    availability is now gated by clinic hours, not individual staff schedules.
+    """
     query = (
         select(Staff)
         .join(Staff.services)
@@ -201,14 +206,16 @@ def find_staff_for_booking(
 
     service = db.get(Service, service_id)
     staff_candidates = db.scalars(query).unique().all()
+    if not staff_candidates:
+        return None  # no staff configured — admin will assign later
+
+    duration = service_duration_minutes(service) if service else DEFAULT_SLOT_MINUTES
     for staff in staff_candidates:
-        if slot_is_available(db, staff.id, booking_date, booking_time, service_duration_minutes(service)):
+        if slot_is_available(db, staff.id, booking_date, booking_time, duration):
             return staff
 
-    raise HTTPException(
-        status_code=status.HTTP_409_CONFLICT,
-        detail="No available specialist found for the selected slot",
-    )
+    # All staff busy at this slot — still allow the booking, admin assigns later
+    return None
 
 
 def slot_is_available(
@@ -291,52 +298,48 @@ def create_booking(db: Session, data: BookingCreate) -> Booking:
     if not service or service.status != RecordStatus.active:
         raise HTTPException(status_code=404, detail="Service not found or inactive")
 
+    # Auto-assign best available staff — may return None (admin assigns later)
     staff = find_staff_for_booking(db, service.id, data.booking_date, data.booking_time, data.staff_id)
-    with staff_date_booking_lock(staff.id, data.booking_date):
-        ensure_booking_slot_available(db, staff.id, data.booking_date, data.booking_time, service_duration_minutes(service))
-        patient = get_or_create_patient(db, data.patient)
-        slot_lock = acquire_booking_slot_lock(db, staff.id, data.booking_date, data.booking_time)
+    patient = get_or_create_patient(db, data.patient)
 
-        for _ in range(3):
-            booking = Booking(
-                booking_code=make_booking_code(db, data.booking_date),
-                patient_id=patient.id,
-                service_id=service.id,
-                staff_id=staff.id,
-                booking_date=data.booking_date,
-                booking_time=data.booking_time,
-                duration_minutes=service.duration_minutes,
-                price=service.price,
-                currency=service.currency,
-                notes=data.notes,
-                first_visit=data.first_visit,
-                status=BookingStatus.pending,
-            )
-            db.add(booking)
-            try:
-                db.flush()
-                slot_lock.booking_id = booking.id
-                db.add(
-                    Notification(
-                        booking_id=booking.id,
-                        channel="dashboard",
-                        recipient="admin",
-                        subject="New appointment request",
-                        message=f"New booking request {booking.booking_code} received.",
-                    )
+    for _ in range(3):
+        booking = Booking(
+            booking_code=make_booking_code(db, data.booking_date),
+            patient_id=patient.id,
+            service_id=service.id,
+            staff_id=staff.id if staff else None,
+            booking_date=data.booking_date,
+            booking_time=data.booking_time,
+            duration_minutes=service.duration_minutes,
+            price=service.price,
+            currency=service.currency,
+            notes=data.notes,
+            first_visit=data.first_visit,
+            status=BookingStatus.pending,
+        )
+        db.add(booking)
+        try:
+            db.flush()
+            db.add(
+                Notification(
+                    booking_id=booking.id,
+                    channel="dashboard",
+                    recipient="admin",
+                    subject="New appointment request",
+                    message=f"New booking request {booking.booking_code} received.",
                 )
-                mail = create_booking_mail(booking, "created")
-                if mail:
-                    db.add(mail)
-                db.commit()
-                db.refresh(booking)
-                return booking
-            except IntegrityError as exc:
-                db.rollback()
-                if not is_unique_booking_code_error(exc):
-                    raise
-                patient = get_or_create_patient(db, data.patient)
-                slot_lock = acquire_booking_slot_lock(db, staff.id, data.booking_date, data.booking_time)
+            )
+            mail = create_booking_mail(booking, "created")
+            if mail:
+                db.add(mail)
+            db.commit()
+            db.refresh(booking)
+            return booking
+        except IntegrityError as exc:
+            db.rollback()
+            if not is_unique_booking_code_error(exc):
+                raise
+            patient = get_or_create_patient(db, data.patient)
 
     raise HTTPException(status_code=409, detail="Could not allocate booking code. Please retry.")
 
@@ -383,101 +386,114 @@ def update_booking_status(db: Session, booking: Booking, status_value: BookingSt
     return booking
 
 
-def available_slots(db: Session, service_id: int, selected_date: date, staff_id: int | None = None) -> list[str]:
-    if selected_date < date.today():
-        return []
+# ── Clinic default schedule (used when no staff constraints are needed) ───────
+# Slots are generated from clinic hours; doctor is assigned by admin after booking.
+_CLINIC_WORK_START  = time(9, 0)
+_CLINIC_WORK_END    = time(18, 0)
+_CLINIC_BREAK_START = time(13, 0)
+_CLINIC_BREAK_END   = time(14, 0)
+_CLINIC_WORK_DAYS   = {0, 1, 2, 3, 4, 5}  # Mon–Sat  (0=Mon … 6=Sun)
 
+
+def _slots_for_date(
+    d: date,
+    booked_times: set[str],
+    duration: int,
+    now: datetime | None = None,
+) -> dict[str, list[str]]:
+    """
+    Generate clinic-hour slots for `d` using the default schedule.
+    `booked_times` = HH:MM strings already taken by any confirmed/pending booking
+    for this service on this date.  No staff required.
+    """
+    if d.weekday() not in _CLINIC_WORK_DAYS:
+        return {"free": [], "taken": []}
+
+    work_start  = datetime.combine(d, _CLINIC_WORK_START)
+    work_end    = datetime.combine(d, _CLINIC_WORK_END)
+    break_start = datetime.combine(d, _CLINIC_BREAK_START)
+    break_end   = datetime.combine(d, _CLINIC_BREAK_END)
+    cutoff      = now if (now and d == now.date()) else None
+
+    free: list[str] = []
+    taken: list[str] = []
+    cursor = work_start
+    while cursor < work_end:
+        slot_end = cursor + timedelta(minutes=duration)
+        if slot_end > work_end:
+            break
+        # skip already-passed time today (30-min look-ahead buffer)
+        if cutoff and cursor < cutoff + timedelta(minutes=30):
+            cursor += timedelta(minutes=DEFAULT_SLOT_MINUTES)
+            continue
+        # skip lunch break
+        if cursor < break_end and slot_end > break_start:
+            cursor += timedelta(minutes=DEFAULT_SLOT_MINUTES)
+            continue
+        label = cursor.strftime("%H:%M")
+        (taken if label in booked_times else free).append(label)
+        cursor += timedelta(minutes=DEFAULT_SLOT_MINUTES)
+
+    return {"free": free, "taken": taken}
+
+
+def available_slots(db: Session, service_id: int, selected_date: date, staff_id: int | None = None) -> list[str]:
+    """Return only free slot strings for a single date (legacy /slots endpoint)."""
+    result = available_slots_range(db, service_id, selected_date, days=1)
+    return result.get(selected_date.isoformat(), {}).get("free", [])
+
+
+def available_slots_range(
+    db: Session,
+    service_id: int,
+    start_date: date,
+    days: int = 30,
+    staff_id: int | None = None,  # kept for API compat, no longer used for slot gating
+) -> dict[str, dict[str, list[str]]]:
+    """
+    Return {date_iso: {"free": [...], "taken": [...]}} for `days` days from start_date.
+    Slots are based on clinic operating hours — no staff configuration required.
+    A slot is 'taken' when an existing booking already occupies it for this service.
+    Uses 2 DB queries total regardless of date range.
+    """
+    today = date.today()
+    now   = datetime.now()
+    all_dates = [start_date + timedelta(days=i) for i in range(days)]
+    dates     = [d for d in all_dates if d >= today]
+    empty: dict[str, list[str]] = {"free": [], "taken": []}
+    result: dict[str, dict[str, list[str]]] = {d.isoformat(): dict(empty) for d in all_dates}
+
+    if not dates:
+        return result
+
+    # 1. Validate service exists and is active
     service = db.get(Service, service_id)
     if not service or service.status != RecordStatus.active:
-        return []
+        return result
 
-    staff_query = (
-        select(Staff)
-        .join(Staff.services)
-        .where(Staff.status == RecordStatus.active, Service.id == service_id)
-    )
-    if staff_id:
-        staff_query = staff_query.where(Staff.id == staff_id)
-
-    staff_members = db.scalars(staff_query).unique().all()
-    if not staff_members:
-        return []
-        
-    staff_ids = [s.id for s in staff_members]
-    
-    # 1. Fetch all availabilities for these staff members for this day of week
-    availabilities = db.scalars(
-        select(StaffAvailability).where(
-            StaffAvailability.staff_id.in_(staff_ids),
-            StaffAvailability.day_of_week == selected_date.weekday(),
-            StaffAvailability.status == RecordStatus.active,
-        )
-    ).all()
-    availability_by_staff = {a.staff_id: a for a in availabilities}
-    
-    # 2. Fetch all blocking bookings for these staff on this date
+    # 2. Fetch existing bookings for this service across the date range (one query)
     bookings = db.scalars(
         select(Booking).where(
-            Booking.staff_id.in_(staff_ids),
-            Booking.booking_date == selected_date,
+            Booking.service_id == service_id,
+            Booking.booking_date >= dates[0],
+            Booking.booking_date <= dates[-1],
             Booking.status.in_(BLOCKING_STATUSES),
         )
     ).all()
-    
-    bookings_by_staff = {}
+    booked_by_date: dict[date, set[str]] = {}
     for b in bookings:
-        bookings_by_staff.setdefault(b.staff_id, []).append(b)
+        if b.booking_time:
+            booked_by_date.setdefault(b.booking_date, set()).add(
+                b.booking_time.strftime("%H:%M")
+            )
 
-    slots: set[str] = set()
     duration = service_duration_minutes(service)
-    
-    for staff in staff_members:
-        availability = availability_by_staff.get(staff.id)
-        if not availability:
-            continue
+    for d in dates:
+        result[d.isoformat()] = _slots_for_date(
+            d, booked_by_date.get(d, set()), duration, now
+        )
 
-        cursor = datetime.combine(selected_date, availability.start_time)
-        end_at = datetime.combine(selected_date, availability.end_time)
-        
-        work_end = end_at
-        break_start = datetime.combine(selected_date, availability.break_start_time) if availability.break_start_time else None
-        break_end = datetime.combine(selected_date, availability.break_end_time) if availability.break_end_time else None
-        
-        staff_bookings = bookings_by_staff.get(staff.id, [])
-        booked_intervals = []
-        for b in staff_bookings:
-            b_start = datetime.combine(selected_date, b.booking_time)
-            b_end = b_start + timedelta(minutes=b.duration_minutes or DEFAULT_SLOT_MINUTES)
-            booked_intervals.append((b_start, b_end))
-
-        while cursor < end_at:
-            slot_start = cursor
-            slot_end = cursor + timedelta(minutes=duration)
-            
-            # Check work hours
-            if slot_end > work_end:
-                break
-                
-            is_free = True
-            
-            # Check break
-            if break_start and break_end:
-                if slot_start < break_end and slot_end > break_start:
-                    is_free = False
-            
-            # Check bookings
-            if is_free:
-                for b_start, b_end in booked_intervals:
-                    if slot_start < b_end and slot_end > b_start:
-                        is_free = False
-                        break
-                        
-            if is_free:
-                slots.add(slot_start.time().strftime("%H:%M"))
-                
-            cursor += timedelta(minutes=30)
-
-    return sorted(slots)
+    return result
 
 
 def dashboard_stats(db: Session) -> dict:

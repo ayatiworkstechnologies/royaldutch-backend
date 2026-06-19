@@ -14,6 +14,7 @@ from app.models.refresh_token import RefreshToken
 from app.models.service import Service
 from app.models.setting import ClinicSetting
 from app.models.staff import Staff, StaffAvailability, staff_services
+from app.models.contact import Contact
 from app.models.whatsapp import WhatsAppMessage
 
 __all__ = [
@@ -37,5 +38,6 @@ __all__ = [
     "Staff",
     "StaffAvailability",
     "staff_services",
+    "Contact",
     "WhatsAppMessage",
 ]
