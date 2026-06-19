@@ -282,15 +282,27 @@ def ensure_booking_slot_available(
 
 
 def ensure_booking_can_block_slot(db: Session, booking: Booking, status_value: BookingStatus) -> None:
+    # Slot gating is now based on clinic hours, not staff availability.
+    # Only block if another booking by the SAME staff overlaps this slot.
     if status_value in BLOCKING_STATUSES and booking.staff_id:
-        ensure_booking_slot_available(
-            db,
-            booking.staff_id,
-            booking.booking_date,
-            booking.booking_time,
-            booking.duration_minutes or DEFAULT_SLOT_MINUTES,
-            booking.id,
+        conflict = db.scalar(
+            select(Booking).where(
+                Booking.id != booking.id,
+                Booking.staff_id == booking.staff_id,
+                Booking.booking_date == booking.booking_date,
+                Booking.status.in_(BLOCKING_STATUSES),
+            )
         )
+        if conflict:
+            cs = datetime.combine(conflict.booking_date, conflict.booking_time)
+            ce = cs + timedelta(minutes=conflict.duration_minutes or DEFAULT_SLOT_MINUTES)
+            bs = datetime.combine(booking.booking_date, booking.booking_time)
+            be = bs + timedelta(minutes=booking.duration_minutes or DEFAULT_SLOT_MINUTES)
+            if bs < ce and be > cs:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"This doctor already has a booking at {booking.booking_time}",
+                )
 
 
 def create_booking(db: Session, data: BookingCreate) -> Booking:
@@ -351,17 +363,19 @@ def update_booking(db: Session, booking: Booking, data: BookingUpdate) -> Bookin
     staff_id = update_data.get("staff_id", booking.staff_id)
     new_status = update_data.get("status", booking.status)
 
-    if {"booking_date", "booking_time", "staff_id"} & update_data.keys():
-        if staff_id is None:
-            raise HTTPException(status_code=409, detail="Selected specialist is required")
-        ensure_booking_slot_available(
-            db,
-            staff_id,
-            booking_date,
-            booking_time,
-            booking.duration_minutes or DEFAULT_SLOT_MINUTES,
-            booking.id,
-        )
+    # Only check slot conflict when date or time is actually changing,
+    # not when admin is just assigning/reassigning a staff member.
+    rescheduling = {"booking_date", "booking_time"} & update_data.keys()
+    if rescheduling:
+        if staff_id is not None:
+            ensure_booking_slot_available(
+                db,
+                staff_id,
+                booking_date,
+                booking_time,
+                booking.duration_minutes or DEFAULT_SLOT_MINUTES,
+                booking.id,
+            )
         if "status" not in update_data and booking.status not in TERMINAL_STATUSES:
             update_data["status"] = BookingStatus.rescheduled
 
