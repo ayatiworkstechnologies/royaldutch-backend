@@ -8,6 +8,7 @@ from app.api.routes import (
     billing,
     bookings,
     categories,
+    chat,
     dashboard,
     email_templates,
     mail,
@@ -27,6 +28,7 @@ api_router.include_router(account.router)
 api_router.include_router(admin_users.router)
 api_router.include_router(audit_logs.router)
 api_router.include_router(auth.router)
+api_router.include_router(chat.router)
 api_router.include_router(categories.router)
 api_router.include_router(services.router)
 api_router.include_router(settings.router)

@@ -28,7 +28,7 @@ Set these in Render dashboard:
 ```env
 APP_NAME=Royal Dutch Medical Centre API
 APP_ENV=production
-API_V1_PREFIX=/api/v1
+API_V1_PREFIX=/api
 DATABASE_URL=mysql+pymysql://USER:PASSWORD@HOST:PORT/DATABASE
 DATABASE_SSL=true
 DATABASE_SSL_CA_PATH=/etc/ssl/certs/ca-certificates.crt

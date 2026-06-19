@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "Royal Dutch Medical Centre API"
     app_env: str = "local"
-    api_v1_prefix: str = "/api/v1"
+    api_v1_prefix: str = "/api"
     database_url: str = "mysql+pymysql://root:password@127.0.0.1:3306/royaldutch"
     database_ssl: bool = False
     database_ssl_ca_path: str = ""
@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     whatsapp_api_url: str = ""
     whatsapp_api_token: str = ""
     whatsapp_from_number: str = ""
+    anthropic_api_key: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

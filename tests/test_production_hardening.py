@@ -44,7 +44,7 @@ def test_admin_seed_endpoint_disabled_in_production(monkeypatch):
     Base.metadata.drop_all(bind=engine)
 
     with TestClient(app) as client:
-        response = client.post("/api/v1/auth/ensure-admin")
+        response = client.post("/api/auth/ensure-admin")
 
     assert response.status_code == 403
     get_settings.cache_clear()
@@ -55,13 +55,13 @@ def test_login_rate_limit_applies():
     with TestClient(app) as client:
         for _ in range(5):
             response = client.post(
-                "/api/v1/auth/login",
+                "/api/auth/login",
                 json={"email": "missing@example.com", "password": "wrong-password"},
             )
             assert response.status_code == 401
 
         limited = client.post(
-            "/api/v1/auth/login",
+            "/api/auth/login",
             json={"email": "missing@example.com", "password": "wrong-password"},
         )
 
@@ -214,10 +214,10 @@ def test_paginated_categories_response_has_envelope():
     Base.metadata.drop_all(bind=engine)
     with TestClient(app) as client:
         token = client.post(
-            "/api/v1/auth/login",
+            "/api/auth/login",
             json={"email": "admin@royaldutch.ae", "password": "Admin@12345"},
         ).json()["access_token"]
-        response = client.get("/api/v1/patients?page=1&limit=2", headers={"Authorization": f"Bearer {token}"})
+        response = client.get("/api/patients?page=1&limit=2", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 200
     body = response.json()
@@ -230,11 +230,11 @@ def test_settings_update_creates_audit_log():
     Base.metadata.drop_all(bind=engine)
     with TestClient(app) as client:
         token = client.post(
-            "/api/v1/auth/login",
+            "/api/auth/login",
             json={"email": "admin@royaldutch.ae", "password": "Admin@12345"},
         ).json()["access_token"]
         response = client.patch(
-            "/api/v1/settings",
+            "/api/settings",
             headers={"Authorization": f"Bearer {token}", "X-Request-ID": "test-request-id"},
             json={"clinic_name": "Audit Clinic"},
         )
@@ -252,18 +252,18 @@ def test_patient_and_notification_writes_create_audit_logs():
     Base.metadata.drop_all(bind=engine)
     with TestClient(app) as client:
         token = client.post(
-            "/api/v1/auth/login",
+            "/api/auth/login",
             json={"email": "admin@royaldutch.ae", "password": "Admin@12345"},
         ).json()["access_token"]
         headers = {"Authorization": f"Bearer {token}"}
         patient = client.post(
-            "/api/v1/patients",
+            "/api/patients",
             headers=headers,
             json={"full_name": "Audit Patient", "email": "audit-patient@example.com", "phone": "+971500001111"},
         )
         assert patient.status_code == 200, patient.text
         notification = client.post(
-            "/api/v1/notifications",
+            "/api/notifications",
             headers=headers,
             json={"channel": "dashboard", "recipient": "admin", "subject": "Audit", "message": "Audit notification"},
         )
@@ -280,10 +280,10 @@ def test_audit_logs_are_super_admin_only():
     Base.metadata.drop_all(bind=engine)
     with TestClient(app) as client:
         admin_token = client.post(
-            "/api/v1/auth/login",
+            "/api/auth/login",
             json={"email": "admin@royaldutch.ae", "password": "Admin@12345"},
         ).json()["access_token"]
-        denied = client.get("/api/v1/audit-logs", headers={"Authorization": f"Bearer {admin_token}"})
+        denied = client.get("/api/audit-logs", headers={"Authorization": f"Bearer {admin_token}"})
         assert denied.status_code == 403
 
         from app.db.session import SessionLocal
@@ -294,10 +294,10 @@ def test_audit_logs_are_super_admin_only():
             db.commit()
 
         super_token = client.post(
-            "/api/v1/auth/login",
+            "/api/auth/login",
             json={"email": "admin@royaldutch.ae", "password": "Admin@12345"},
         ).json()["access_token"]
-        allowed = client.get("/api/v1/audit-logs", headers={"Authorization": f"Bearer {super_token}"})
+        allowed = client.get("/api/audit-logs", headers={"Authorization": f"Bearer {super_token}"})
         assert allowed.status_code == 200, allowed.text
 
 
@@ -334,7 +334,7 @@ def test_customer_cannot_access_another_customer_invoice():
         token_a = create_access_token(user_a.id)
 
     with TestClient(app) as client:
-        response = client.get(f"/api/v1/account/invoices/{invoice_id}/pdf", headers={"Authorization": f"Bearer {token_a}"})
+        response = client.get(f"/api/account/invoices/{invoice_id}/pdf", headers={"Authorization": f"Bearer {token_a}"})
 
     assert response.status_code == 404
 
@@ -356,10 +356,10 @@ def test_refund_amount_reduces_dashboard_net_revenue():
 
     with TestClient(app) as client:
         token = client.post(
-            "/api/v1/auth/login",
+            "/api/auth/login",
             json={"email": "admin@royaldutch.ae", "password": "Admin@12345"},
         ).json()["access_token"]
-        response = client.get("/api/v1/dashboard", headers={"Authorization": f"Bearer {token}"})
+        response = client.get("/api/dashboard", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 200, response.text
     body = response.json()

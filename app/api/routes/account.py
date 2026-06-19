@@ -36,7 +36,8 @@ def optional_customer_patient(db: DbSession, user: User) -> Patient | None:
 
 def profile_payload(user: User, patient: Patient | None) -> dict:
     return {
-        "id": patient.id if patient else None,
+        "id": user.id,
+        "patient_id": patient.id if patient else None,
         "full_name": patient.full_name if patient else user.name,
         "email": user.email,
         "phone": patient.phone if patient else "",
@@ -44,6 +45,8 @@ def profile_payload(user: User, patient: Patient | None) -> dict:
         "age": patient.age if patient else None,
         "notes": patient.notes if patient else "",
         "documents": patient.documents if patient else "",
+        "role": user.role,
+        "is_active": user.is_active,
     }
 
 

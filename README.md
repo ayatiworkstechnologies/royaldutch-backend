@@ -135,11 +135,11 @@ API docs:
 
 Additional production-ready modules:
 
-- Refresh tokens: `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`
-- Patient documents: `GET/POST/PATCH/DELETE /api/v1/patients/{patient_id}/documents`
-- WhatsApp: `POST /api/v1/whatsapp/send`, `POST /api/v1/whatsapp/notifications/{notification_id}/send`
-- Reports: `GET /api/v1/reports/summary`, `GET /api/v1/reports/operations`
-- Admin users: `GET/POST/PATCH/DELETE /api/v1/admin/users`
+- Refresh tokens: `POST /api/auth/refresh`, `POST /api/auth/logout`
+- Patient documents: `GET/POST/PATCH/DELETE /api/patients/{patient_id}/documents`
+- WhatsApp: `POST /api/whatsapp/send`, `POST /api/whatsapp/notifications/{notification_id}/send`
+- Reports: `GET /api/reports/summary`, `GET /api/reports/operations`
+- Admin users: `GET/POST/PATCH/DELETE /api/admin/users`
 
 New database tables:
 
@@ -194,7 +194,7 @@ Required database/auth values:
 ```env
 APP_NAME=Royal Dutch Medical Centre API
 APP_ENV=local
-API_V1_PREFIX=/api/v1
+API_V1_PREFIX=/api
 DATABASE_URL=mysql+pymysql://root:password@127.0.0.1:3306/royaldutch
 DATABASE_SSL=false
 DATABASE_SSL_CA_PATH=
@@ -309,45 +309,45 @@ Supported placeholders:
 SMTP health endpoint:
 
 ```text
-GET /api/v1/mail/smtp-status
+GET /api/mail/smtp-status
 ```
 
 Send queued mail:
 
 ```text
-POST /api/v1/mail/send-queued
-POST /api/v1/mail/send-queued?include_failed=true
+POST /api/mail/send-queued
+POST /api/mail/send-queued?include_failed=true
 ```
 
 ## Important API Endpoints
 
 Public:
 
-- `GET /api/v1/categories`
-- `GET /api/v1/services`
-- `GET /api/v1/services/{service_slug}`
-- `GET /api/v1/bookings/slots`
-- `POST /api/v1/bookings`
-- `GET /api/v1/bookings/lookup?phone=...`
+- `GET /api/categories`
+- `GET /api/services`
+- `GET /api/services/{service_slug}`
+- `GET /api/bookings/slots`
+- `POST /api/bookings`
+- `GET /api/bookings/lookup?phone=...`
 
 Admin:
 
-- `POST /api/v1/auth/login`
-- `GET /api/v1/bookings`
-- `PATCH /api/v1/bookings/{booking_id}/status`
-- `POST /api/v1/bookings/{booking_id}/mail/{template}`
-- `GET /api/v1/bookings/calendar`
-- `GET /api/v1/staff`
-- `GET /api/v1/patients`
-- `GET /api/v1/payments`
-- `GET /api/v1/billing`
-- `POST /api/v1/billing/from-booking/{booking_id}`
-- `GET /api/v1/mail`
-- `POST /api/v1/mail/{mail_id}/send`
-- `GET /api/v1/email-templates`
-- `POST /api/v1/email-templates/seed-defaults`
-- `GET /api/v1/notifications`
-- `GET /api/v1/dashboard`
+- `POST /api/auth/login`
+- `GET /api/bookings`
+- `PATCH /api/bookings/{booking_id}/status`
+- `POST /api/bookings/{booking_id}/mail/{template}`
+- `GET /api/bookings/calendar`
+- `GET /api/staff`
+- `GET /api/patients`
+- `GET /api/payments`
+- `GET /api/billing`
+- `POST /api/billing/from-booking/{booking_id}`
+- `GET /api/mail`
+- `POST /api/mail/{mail_id}/send`
+- `GET /api/email-templates`
+- `POST /api/email-templates/seed-defaults`
+- `GET /api/notifications`
+- `GET /api/dashboard`
 
 Admin routes require:
 
@@ -432,7 +432,7 @@ python -B -c "from app.services.smtp_service import check_smtp_connection; print
 - Configure `TRUSTED_HOSTS` for production domains.
 - Run `alembic upgrade head` before deployment.
 - Validate `alembic upgrade head` against a MySQL staging database before production.
-- Verify SMTP settings with `/api/v1/mail/smtp-status`.
+- Verify SMTP settings with `/api/mail/smtp-status`.
 - Remove or rotate the default admin password after initial setup.
 - Run the mail worker as a separate process with `python -m app.workers.mail_worker`.
 - Keep Redis available through `REDIS_URL` so rate limits are shared across API instances.
@@ -492,7 +492,7 @@ Booking concurrency behavior:
 SMTP validation:
 
 ```powershell
-GET /api/v1/mail/smtp-status
+GET /api/mail/smtp-status
 pytest tests/test_smtp_service.py
 pytest tests/test_production_hardening.py
 ```
@@ -519,9 +519,9 @@ Check enum columns, foreign keys, unique constraints, indexes, and the mail queu
 Audit logs are restricted to `super_admin`:
 
 ```text
-GET /api/v1/audit-logs
-GET /api/v1/audit-logs?page=1&limit=20
-GET /api/v1/audit-logs?action=settings.update
+GET /api/audit-logs
+GET /api/audit-logs?page=1&limit=20
+GET /api/audit-logs?action=settings.update
 ```
 
 Audited actions include admin login, booking writes, patient writes, notification writes, category/service/staff writes, billing/payment writes, settings updates, manual mail send/delete, and email-template changes.

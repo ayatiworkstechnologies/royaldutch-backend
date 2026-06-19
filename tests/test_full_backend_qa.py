@@ -50,7 +50,7 @@ def reset_db() -> None:
 
 def auth_headers_for(email: str = "admin@royaldutch.ae", password: str = "Admin@12345") -> dict[str, str]:
     with TestClient(app) as client:
-        response = client.post("/api/v1/auth/login", json={"email": email, "password": password})
+        response = client.post("/api/auth/login", json={"email": email, "password": password})
         assert response.status_code == 200, response.text
         return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
@@ -118,39 +118,39 @@ def test_auth_otp_google_and_production_boundaries(monkeypatch):
     reset_db()
     with TestClient(app) as client:
         assert client.get("/health").json()["status"] == "ok"
-        assert client.post("/api/v1/auth/login", json={"email": "admin@royaldutch.ae", "password": "bad"}).status_code == 401
+        assert client.post("/api/auth/login", json={"email": "admin@royaldutch.ae", "password": "bad"}).status_code == 401
 
         registered = client.post(
-            "/api/v1/auth/register",
+            "/api/auth/register",
             json={"name": "QA Customer", "email": "qa-customer@example.com", "phone": "+971555010001", "password": "Password123"},
         )
         assert registered.status_code == 201, registered.text
-        assert client.post("/api/v1/auth/register", json={"name": "QA Customer", "email": "qa-customer@example.com", "password": "Password123"}).status_code == 400
-        assert client.post("/api/v1/auth/login", json={"email": "qa-customer@example.com", "password": "Password123"}).status_code == 200
+        assert client.post("/api/auth/register", json={"name": "QA Customer", "email": "qa-customer@example.com", "password": "Password123"}).status_code == 400
+        assert client.post("/api/auth/login", json={"email": "qa-customer@example.com", "password": "Password123"}).status_code == 200
 
-        otp_response = client.post("/api/v1/auth/otp/request", json={"email": "otp-qa@example.com"})
+        otp_response = client.post("/api/auth/otp/request", json={"email": "otp-qa@example.com"})
         assert otp_response.status_code == 200, otp_response.text
         assert "dev_code" in otp_response.json()
-        assert client.post("/api/v1/auth/otp/verify", json={"email": "otp-qa@example.com", "code": "000000"}).status_code == 401
-        assert client.post("/api/v1/auth/otp/verify", json={"email": "otp-qa@example.com", "code": otp_response.json()["dev_code"]}).status_code == 200
-        assert client.post("/api/v1/auth/google", json={"credential": "dev-google:google-qa@example.com:Google QA"}).status_code == 200
+        assert client.post("/api/auth/otp/verify", json={"email": "otp-qa@example.com", "code": "000000"}).status_code == 401
+        assert client.post("/api/auth/otp/verify", json={"email": "otp-qa@example.com", "code": otp_response.json()["dev_code"]}).status_code == 200
+        assert client.post("/api/auth/google", json={"credential": "dev-google:google-qa@example.com:Google QA"}).status_code == 200
 
     with SessionLocal() as db:
         expired = AuthOtp(email="expired@example.com", code_hash=hash_password("123456"), expires_at=datetime.now(timezone.utc) - timedelta(minutes=1))
         db.add(expired)
         db.commit()
     with TestClient(app) as client:
-        assert client.post("/api/v1/auth/otp/verify", json={"email": "expired@example.com", "code": "123456"}).status_code == 401
+        assert client.post("/api/auth/otp/verify", json={"email": "expired@example.com", "code": "123456"}).status_code == 401
 
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("SECRET_KEY", "x" * 40)
     get_settings.cache_clear()
     with TestClient(app) as client:
-        prod_otp = client.post("/api/v1/auth/otp/request", json={"email": "prod-otp@example.com"})
+        prod_otp = client.post("/api/auth/otp/request", json={"email": "prod-otp@example.com"})
         assert prod_otp.status_code == 200, prod_otp.text
         assert "dev_code" not in prod_otp.json()
-        assert client.post("/api/v1/auth/google", json={"credential": "dev-google:prod@example.com:Prod"}).status_code in {400, 401}
-        assert client.post("/api/v1/auth/ensure-admin").status_code == 403
+        assert client.post("/api/auth/google", json={"credential": "dev-google:prod@example.com:Prod"}).status_code in {400, 401}
+        assert client.post("/api/auth/ensure-admin").status_code == 403
     monkeypatch.setenv("APP_ENV", "local")
     get_settings.cache_clear()
 
@@ -159,8 +159,8 @@ def test_rate_limiting_memory_and_redis_paths(monkeypatch):
     reset_db()
     with TestClient(app) as client:
         for _ in range(3):
-            assert client.post("/api/v1/auth/otp/request", json={"email": "limited@example.com"}).status_code == 200
-        assert client.post("/api/v1/auth/otp/request", json={"email": "limited@example.com"}).status_code == 429
+            assert client.post("/api/auth/otp/request", json={"email": "limited@example.com"}).status_code == 200
+        assert client.post("/api/auth/otp/request", json={"email": "limited@example.com"}).status_code == 429
 
     class FakeRedis:
         def __init__(self):
@@ -203,33 +203,33 @@ def test_role_permissions_and_admin_route_boundaries():
     assert not has_permission(users[UserRole.marketing], "billing.manage")
 
     with TestClient(app) as client:
-        assert client.get("/api/v1/billing", headers=token_headers(users[UserRole.accountant].id)).status_code == 200
-        assert client.get("/api/v1/mail", headers=token_headers(users[UserRole.accountant].id)).status_code == 403
-        assert client.get("/api/v1/mail", headers=token_headers(users[UserRole.marketing].id)).status_code == 200
-        assert client.get("/api/v1/dashboard", headers=token_headers(users[UserRole.customer].id)).status_code == 403
-        assert client.get("/api/v1/audit-logs", headers=token_headers(users[UserRole.admin].id)).status_code == 403
-        assert client.get("/api/v1/audit-logs", headers=token_headers(users[UserRole.super_admin].id)).status_code == 200
+        assert client.get("/api/billing", headers=token_headers(users[UserRole.accountant].id)).status_code == 200
+        assert client.get("/api/mail", headers=token_headers(users[UserRole.accountant].id)).status_code == 403
+        assert client.get("/api/mail", headers=token_headers(users[UserRole.marketing].id)).status_code == 200
+        assert client.get("/api/dashboard", headers=token_headers(users[UserRole.customer].id)).status_code == 403
+        assert client.get("/api/audit-logs", headers=token_headers(users[UserRole.admin].id)).status_code == 403
+        assert client.get("/api/audit-logs", headers=token_headers(users[UserRole.super_admin].id)).status_code == 200
 
 
 def test_category_service_staff_booking_slots_and_locks():
     service_id, staff_id, booking_date = seed_bookable_service()
     with TestClient(app) as client:
-        slots = client.get("/api/v1/bookings/slots", params={"service_id": service_id, "selected_date": booking_date.isoformat(), "staff_id": staff_id})
+        slots = client.get("/api/bookings/slots", params={"service_id": service_id, "selected_date": booking_date.isoformat(), "staff_id": staff_id})
         assert slots.status_code == 200
         assert "09:00" in slots.json()["slots"]
         assert "10:00" not in slots.json()["slots"]
 
-        first = client.post("/api/v1/bookings", json=create_booking_payload(service_id, staff_id, booking_date))
+        first = client.post("/api/bookings", json=create_booking_payload(service_id, staff_id, booking_date))
         assert first.status_code == 200, first.text
         assert first.json()["booking_code"].startswith(f"RD-{booking_date:%y%m%d}-")
-        duplicate = client.post("/api/v1/bookings", json=create_booking_payload(service_id, staff_id, booking_date, "+971555000222"))
+        duplicate = client.post("/api/bookings", json=create_booking_payload(service_id, staff_id, booking_date, "+971555000222"))
         assert duplicate.status_code == 409
 
         admin_headers = auth_headers_for()
-        assert client.patch(f"/api/v1/bookings/{first.json()['id']}/status", headers=admin_headers, json={"status": "confirmed"}).status_code == 200
+        assert client.patch(f"/api/bookings/{first.json()['id']}/status", headers=admin_headers, json={"status": "confirmed"}).status_code == 200
         with SessionLocal() as db:
             assert db.query(BookingSlotLock).count() == 1
-        assert client.patch(f"/api/v1/bookings/{first.json()['id']}/status", headers=admin_headers, json={"status": "completed"}).status_code == 200
+        assert client.patch(f"/api/bookings/{first.json()['id']}/status", headers=admin_headers, json={"status": "completed"}).status_code == 200
 
     with SessionLocal() as db:
         assert db.query(BookingSlotLock).count() == 0
@@ -237,7 +237,7 @@ def test_category_service_staff_booking_slots_and_locks():
         service.status = RecordStatus.inactive
         db.commit()
     with TestClient(app) as client:
-        inactive = client.post("/api/v1/bookings", json=create_booking_payload(service_id, staff_id, booking_date, "+971555000333", "11:00"))
+        inactive = client.post("/api/bookings", json=create_booking_payload(service_id, staff_id, booking_date, "+971555000333", "11:00"))
         assert inactive.status_code == 404
 
 
@@ -245,9 +245,9 @@ def test_cancelled_booking_releases_slot_and_reschedule_updates_lock():
     service_id, staff_id, booking_date = seed_bookable_service()
     with TestClient(app) as client:
         admin_headers = auth_headers_for()
-        booking = client.post("/api/v1/bookings", json=create_booking_payload(service_id, staff_id, booking_date)).json()
+        booking = client.post("/api/bookings", json=create_booking_payload(service_id, staff_id, booking_date)).json()
         rescheduled = client.patch(
-            f"/api/v1/bookings/{booking['id']}",
+            f"/api/bookings/{booking['id']}",
             headers=admin_headers,
             json={"booking_time": "09:30"},
         )
@@ -255,11 +255,11 @@ def test_cancelled_booking_releases_slot_and_reschedule_updates_lock():
         with SessionLocal() as db:
             lock = db.scalar(select(BookingSlotLock).where(BookingSlotLock.booking_id == booking["id"]))
             assert str(lock.booking_time) == "09:30:00"
-        cancelled = client.patch(f"/api/v1/bookings/{booking['id']}/status", headers=admin_headers, json={"status": "cancelled"})
+        cancelled = client.patch(f"/api/bookings/{booking['id']}/status", headers=admin_headers, json={"status": "cancelled"})
         assert cancelled.status_code == 200, cancelled.text
         with SessionLocal() as db:
             assert db.scalar(select(BookingSlotLock).where(BookingSlotLock.booking_id == booking["id"])) is None
-        replacement = client.post("/api/v1/bookings", json=create_booking_payload(service_id, staff_id, booking_date, "+971555000444", "09:30"))
+        replacement = client.post("/api/bookings", json=create_booking_payload(service_id, staff_id, booking_date, "+971555000444", "09:30"))
         assert replacement.status_code == 200, replacement.text
 
 
@@ -267,27 +267,27 @@ def test_billing_payment_pdf_dashboard_and_audit_flow():
     service_id, staff_id, booking_date = seed_bookable_service()
     with TestClient(app) as client:
         admin_headers = auth_headers_for()
-        booking = client.post("/api/v1/bookings", json=create_booking_payload(service_id, staff_id, booking_date)).json()
-        invoice = client.post(f"/api/v1/billing/from-booking/{booking['id']}", headers=admin_headers, json={"discount_amount": "5.00", "tax_amount": "10.00"})
+        booking = client.post("/api/bookings", json=create_booking_payload(service_id, staff_id, booking_date)).json()
+        invoice = client.post(f"/api/billing/from-booking/{booking['id']}", headers=admin_headers, json={"discount_amount": "5.00", "tax_amount": "10.00"})
         assert invoice.status_code == 200, invoice.text
         invoice_body = invoice.json()
         assert invoice_body["total_amount"] == "130.00"
-        same_invoice = client.post(f"/api/v1/billing/from-booking/{booking['id']}", headers=admin_headers, json={})
+        same_invoice = client.post(f"/api/billing/from-booking/{booking['id']}", headers=admin_headers, json={})
         assert same_invoice.json()["id"] == invoice_body["id"]
-        assert client.get(f"/api/v1/billing/{invoice_body['id']}/pdf", headers=admin_headers).content.startswith(b"%PDF")
+        assert client.get(f"/api/billing/{invoice_body['id']}/pdf", headers=admin_headers).content.startswith(b"%PDF")
 
         payment = client.post(
-            "/api/v1/payments",
+            "/api/payments",
             headers=admin_headers,
             json={"booking_id": booking["id"], "invoice_id": invoice_body["id"], "amount": "50.00", "payment_status": "paid", "payment_method": "pay_at_clinic"},
         )
         assert payment.status_code == 200, payment.text
-        updated_invoice = client.get(f"/api/v1/billing/{invoice_body['id']}", headers=admin_headers).json()
+        updated_invoice = client.get(f"/api/billing/{invoice_body['id']}", headers=admin_headers).json()
         assert updated_invoice["status"] == "partially_paid"
         assert updated_invoice["paid_amount"] == "50.00"
-        assert client.patch(f"/api/v1/payments/{payment.json()['id']}", headers=admin_headers, json={"amount": "130.00"}).status_code == 200
-        assert client.post(f"/api/v1/payments/{payment.json()['id']}/mail/payment_received", headers=admin_headers).status_code == 200
-        dashboard = client.get("/api/v1/dashboard", headers=admin_headers).json()
+        assert client.patch(f"/api/payments/{payment.json()['id']}", headers=admin_headers, json={"amount": "130.00"}).status_code == 200
+        assert client.post(f"/api/payments/{payment.json()['id']}/mail/payment_received", headers=admin_headers).status_code == 200
+        dashboard = client.get("/api/dashboard", headers=admin_headers).json()
         assert dashboard["total_revenue"] == dashboard["net_revenue"]
 
     with SessionLocal() as db:
@@ -346,16 +346,16 @@ def test_email_template_notification_audit_pagination_and_request_id():
     with TestClient(app) as client:
         admin_headers = auth_headers_for()
         admin_headers["X-Request-ID"] = "qa-request-id"
-        seeded = client.post("/api/v1/email-templates/seed-defaults", headers=admin_headers)
+        seeded = client.post("/api/email-templates/seed-defaults", headers=admin_headers)
         assert seeded.status_code == 200, seeded.text
-        template = client.post("/api/v1/email-templates", headers=admin_headers, json={"name": "QA Template", "slug": "qa-template", "subject": "Hi", "body": "Hello"})
+        template = client.post("/api/email-templates", headers=admin_headers, json={"name": "QA Template", "slug": "qa-template", "subject": "Hi", "body": "Hello"})
         assert template.status_code == 200, template.text
-        assert client.patch(f"/api/v1/email-templates/{template.json()['id']}", headers=admin_headers, json={"subject": "Updated"}).status_code == 200
-        notification = client.post("/api/v1/notifications", headers=admin_headers, json={"channel": "dashboard", "recipient": "admin", "subject": "QA", "message": "Message"})
+        assert client.patch(f"/api/email-templates/{template.json()['id']}", headers=admin_headers, json={"subject": "Updated"}).status_code == 200
+        notification = client.post("/api/notifications", headers=admin_headers, json={"channel": "dashboard", "recipient": "admin", "subject": "QA", "message": "Message"})
         assert notification.status_code == 200, notification.text
-        assert client.patch(f"/api/v1/notifications/{notification.json()['id']}", headers=admin_headers, json={"status": "sent"}).status_code == 200
+        assert client.patch(f"/api/notifications/{notification.json()['id']}", headers=admin_headers, json={"status": "sent"}).status_code == 200
 
-        for endpoint in ["/api/v1/patients", "/api/v1/billing", "/api/v1/payments", "/api/v1/mail", "/api/v1/notifications"]:
+        for endpoint in ["/api/patients", "/api/billing", "/api/payments", "/api/mail", "/api/notifications"]:
             plain = client.get(endpoint, headers=admin_headers)
             paged = client.get(f"{endpoint}?page=1&limit=2", headers=admin_headers)
             assert plain.status_code == 200, plain.text
@@ -367,10 +367,10 @@ def test_email_template_notification_audit_pagination_and_request_id():
             admin.role = UserRole.super_admin
             db.commit()
         super_headers = auth_headers_for()
-        audit_paged = client.get("/api/v1/audit-logs?page=1&limit=5&action=email_template.seed_defaults", headers=super_headers)
+        audit_paged = client.get("/api/audit-logs?page=1&limit=5&action=email_template.seed_defaults", headers=super_headers)
         assert audit_paged.status_code == 200, audit_paged.text
         assert set(audit_paged.json()) == {"items", "total", "page", "limit", "pages"}
-        assert client.delete(f"/api/v1/email-templates/{template.json()['id']}", headers=super_headers).status_code == 200
+        assert client.delete(f"/api/email-templates/{template.json()['id']}", headers=super_headers).status_code == 200
 
     with SessionLocal() as db:
         actions = {row.action for row in db.query(AuditLog).all()}
@@ -382,20 +382,20 @@ def test_customer_self_service_and_jwt_security_boundaries():
     service_id, staff_id, booking_date = seed_bookable_service()
     with TestClient(app) as client:
         admin_headers = auth_headers_for()
-        booking = client.post("/api/v1/bookings", json=create_booking_payload(service_id, staff_id, booking_date, phone="+971555099999")).json()
-        invoice = client.post(f"/api/v1/billing/from-booking/{booking['id']}", headers=admin_headers, json={}).json()
-        otp = client.post("/api/v1/auth/otp/request", json={"email": "9999@example.com"}).json()
-        customer_token = client.post("/api/v1/auth/otp/verify", json={"email": "9999@example.com", "code": otp["dev_code"]}).json()["access_token"]
+        booking = client.post("/api/bookings", json=create_booking_payload(service_id, staff_id, booking_date, phone="+971555099999")).json()
+        invoice = client.post(f"/api/billing/from-booking/{booking['id']}", headers=admin_headers, json={}).json()
+        otp = client.post("/api/auth/otp/request", json={"email": "9999@example.com"}).json()
+        customer_token = client.post("/api/auth/otp/verify", json={"email": "9999@example.com", "code": otp["dev_code"]}).json()["access_token"]
         customer_headers = {"Authorization": f"Bearer {customer_token}"}
-        assert client.get("/api/v1/account/me", headers=customer_headers).status_code == 200
-        assert client.patch("/api/v1/account/me", headers=customer_headers, json={"full_name": "Updated QA", "phone": "+971555099999"}).status_code == 200
-        assert client.get("/api/v1/account/invoices", headers=customer_headers).status_code == 200
-        assert client.get(f"/api/v1/account/invoices/{invoice['id']}/pdf", headers=customer_headers).content.startswith(b"%PDF")
-        assert client.get("/api/v1/dashboard", headers=customer_headers).status_code == 403
+        assert client.get("/api/account/me", headers=customer_headers).status_code == 200
+        assert client.patch("/api/account/me", headers=customer_headers, json={"full_name": "Updated QA", "phone": "+971555099999"}).status_code == 200
+        assert client.get("/api/account/invoices", headers=customer_headers).status_code == 200
+        assert client.get(f"/api/account/invoices/{invoice['id']}/pdf", headers=customer_headers).content.startswith(b"%PDF")
+        assert client.get("/api/dashboard", headers=customer_headers).status_code == 403
 
         expired = jwt.encode({"sub": "1", "exp": datetime.now(timezone.utc) - timedelta(minutes=1)}, get_settings().secret_key, algorithm="HS256")
-        assert client.get("/api/v1/dashboard", headers={"Authorization": f"Bearer {expired}"}).status_code == 401
-        assert client.get("/api/v1/dashboard", headers={"Authorization": "Bearer not-a-jwt"}).status_code == 401
+        assert client.get("/api/dashboard", headers={"Authorization": f"Bearer {expired}"}).status_code == 401
+        assert client.get("/api/dashboard", headers={"Authorization": "Bearer not-a-jwt"}).status_code == 401
 
 
 def test_alembic_clean_upgrade_and_existing_stamp_flow(tmp_path):

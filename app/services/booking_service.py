@@ -453,6 +453,42 @@ def dashboard_stats(db: Session) -> dict:
         .limit(5)
     ).all()
 
+    recent_bookings_rows = db.execute(
+        select(
+            Booking.id,
+            Booking.booking_code,
+            Booking.booking_date,
+            Booking.booking_time,
+            Booking.status,
+            Booking.price,
+            Booking.currency,
+            Patient.full_name.label("patient_name"),
+            Service.name.label("service_name"),
+            Staff.name.label("staff_name"),
+        )
+        .join(Patient, Booking.patient_id == Patient.id)
+        .join(Service, Booking.service_id == Service.id)
+        .outerjoin(Staff, Booking.staff_id == Staff.id)
+        .order_by(Booking.created_at.desc())
+        .limit(10)
+    ).all()
+
+    recent_bookings = [
+        {
+            "id": row.id,
+            "booking_code": row.booking_code,
+            "booking_date": row.booking_date.isoformat() if row.booking_date else None,
+            "booking_time": row.booking_time.isoformat() if row.booking_time else None,
+            "status": str(row.status),
+            "price": float(row.price) if row.price else 0,
+            "currency": row.currency or "AED",
+            "patient_name": row.patient_name,
+            "service_name": row.service_name,
+            "staff_name": row.staff_name,
+        }
+        for row in recent_bookings_rows
+    ]
+
     return {
         "todays_bookings": db.scalar(
             select(func.count()).select_from(Booking).where(Booking.booking_date == today)
@@ -461,6 +497,8 @@ def dashboard_stats(db: Session) -> dict:
         "confirmed_bookings": count_status(BookingStatus.confirmed),
         "completed_bookings": count_status(BookingStatus.completed),
         "cancelled_bookings": count_status(BookingStatus.cancelled),
+        "no_show_bookings": count_status(BookingStatus.no_show),
+        "total_patients": db.scalar(select(func.count()).select_from(Patient)),
         "total_revenue": net_revenue,
         "booking_revenue": booking_revenue,
         "invoice_revenue": invoice_revenue,
@@ -468,4 +506,5 @@ def dashboard_stats(db: Session) -> dict:
         "refunded_revenue": refunded_revenue,
         "net_revenue": net_revenue,
         "most_booked_services": [{"service": name, "count": count} for name, count in most_booked],
+        "recent_bookings": recent_bookings,
     }

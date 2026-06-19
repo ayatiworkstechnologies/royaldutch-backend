@@ -14,7 +14,7 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.9
       - key: API_V1_PREFIX
-        value: /api/v1
+        value: /api
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
         value: 1440
       - key: BACKEND_CORS_ORIGINS

@@ -68,7 +68,7 @@ def seed_admin_and_patient():
 
 
 def auth_headers(client: TestClient):
-    response = client.post("/api/v1/auth/login", json={"email": "admin-hardening@example.com", "password": "AdminPass123"})
+    response = client.post("/api/auth/login", json={"email": "admin-hardening@example.com", "password": "AdminPass123"})
     assert response.status_code == 200
     payload = response.json()
     assert payload["refresh_token"]
@@ -80,15 +80,15 @@ def test_refresh_token_rotation_and_logout():
     client = TestClient(app)
     _, refresh_token = auth_headers(client)
 
-    refreshed = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
+    refreshed = client.post("/api/auth/refresh", json={"refresh_token": refresh_token})
     assert refreshed.status_code == 200
     assert refreshed.json()["access_token"]
     assert refreshed.json()["refresh_token"] != refresh_token
 
-    reused = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
+    reused = client.post("/api/auth/refresh", json={"refresh_token": refresh_token})
     assert reused.status_code == 401
 
-    logout = client.post("/api/v1/auth/logout", json={"refresh_token": refreshed.json()["refresh_token"]})
+    logout = client.post("/api/auth/logout", json={"refresh_token": refreshed.json()["refresh_token"]})
     assert logout.status_code == 200
 
 
@@ -98,7 +98,7 @@ def test_patient_documents_and_admin_users():
     headers, _ = auth_headers(client)
 
     created = client.post(
-        f"/api/v1/patients/{patient_id}/documents",
+        f"/api/patients/{patient_id}/documents",
         headers=headers,
         json={
             "title": "Consent Form",
@@ -111,12 +111,12 @@ def test_patient_documents_and_admin_users():
     assert created.status_code == 200
     document_id = created.json()["id"]
 
-    listed = client.get(f"/api/v1/patients/{patient_id}/documents", headers=headers)
+    listed = client.get(f"/api/patients/{patient_id}/documents", headers=headers)
     assert listed.status_code == 200
     assert any(item["id"] == document_id for item in listed.json())
 
     admin_user = client.post(
-        "/api/v1/admin/users",
+        "/api/admin/users",
         headers=headers,
         json={"name": "Reports User", "email": "reports-user@example.com", "password": "Password123", "role": "accountant"},
     )
@@ -131,7 +131,7 @@ def test_whatsapp_reporting_and_trace_headers():
     headers["X-Correlation-ID"] = "test-correlation-id"
 
     sent = client.post(
-        "/api/v1/whatsapp/send",
+        "/api/whatsapp/send",
         headers=headers,
         json={"recipient_phone": "+971500000001", "message": "Appointment reminder"},
     )
@@ -139,10 +139,10 @@ def test_whatsapp_reporting_and_trace_headers():
     assert sent.json()["status"] == "sent"
     assert sent.headers["X-Correlation-ID"] == "test-correlation-id"
 
-    summary = client.get(f"/api/v1/reports/summary?date_from={date.today().isoformat()}", headers=headers)
+    summary = client.get(f"/api/reports/summary?date_from={date.today().isoformat()}", headers=headers)
     assert summary.status_code == 200
     assert "bookings_by_status" in summary.json()
 
-    operations = client.get("/api/v1/reports/operations", headers=headers)
+    operations = client.get("/api/reports/operations", headers=headers)
     assert operations.status_code == 200
     assert "payment_mix" in operations.json()

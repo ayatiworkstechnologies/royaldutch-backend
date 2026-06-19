@@ -22,7 +22,7 @@ Main stack:
 Default API prefix:
 
 ```text
-/api/v1
+/api
 ```
 
 Health endpoint:
@@ -55,7 +55,7 @@ Startup sequence:
 4. CORS middleware is added.
 5. Request logging middleware is added.
 6. Trusted host middleware is added when `TRUSTED_HOSTS` is configured.
-7. `api_router` is mounted at `API_V1_PREFIX`, default `/api/v1`.
+7. `api_router` is mounted at `API_V1_PREFIX`, default `/api`.
 8. `/health` endpoint is registered.
 
 Lifespan startup behavior:
@@ -79,7 +79,7 @@ Important environment variables:
 |---|---|
 | `APP_NAME` | FastAPI app title |
 | `APP_ENV` | `local`, staging value, or `production` |
-| `API_V1_PREFIX` | API prefix, default `/api/v1` |
+| `API_V1_PREFIX` | API prefix, default `/api` |
 | `DATABASE_URL` | SQLAlchemy DB URL |
 | `DATABASE_SSL` | Enables MySQL SSL args |
 | `SECRET_KEY` | JWT signing key |
@@ -119,7 +119,7 @@ backend/
 
 Typical request flow:
 
-1. Client calls `/api/v1/...`.
+1. Client calls `/api/...`.
 2. FastAPI routes request to a function under `app/api/routes`.
 3. Route dependencies run:
    - `get_db()` creates a SQLAlchemy session.
@@ -166,7 +166,7 @@ Role permissions:
 Super-admin-only route:
 
 ```text
-GET /api/v1/audit-logs
+GET /api/audit-logs
 ```
 
 ## 7. Database Entities
@@ -427,16 +427,16 @@ draft, queued, processing, sent, failed
 Patient booking flow:
 
 1. Client lists active categories:
-   - `GET /api/v1/categories`
+   - `GET /api/categories`
 2. Client lists active services:
-   - `GET /api/v1/services`
+   - `GET /api/services`
    - optionally filter by category
 3. Client selects service:
-   - `GET /api/v1/services/{service_slug}`
+   - `GET /api/services/{service_slug}`
 4. Client asks for available slots:
-   - `GET /api/v1/bookings/slots?service_id=1&selected_date=2026-06-14`
+   - `GET /api/bookings/slots?service_id=1&selected_date=2026-06-14`
 5. Patient submits booking:
-   - `POST /api/v1/bookings`
+   - `POST /api/bookings`
 6. Backend validates:
    - Service exists and is active.
    - Requested date is not in the past.
@@ -489,7 +489,7 @@ Slot lock behavior:
 Manual invoice flow:
 
 1. Admin posts `InvoiceCreate` to:
-   - `POST /api/v1/billing`
+   - `POST /api/billing`
 2. Backend creates an invoice number:
    - `INV-YYMMDD-XXXXX`
 3. Backend creates invoice items.
@@ -504,7 +504,7 @@ Manual invoice flow:
 Booking invoice flow:
 
 1. Admin calls:
-   - `POST /api/v1/billing/from-booking/{booking_id}`
+   - `POST /api/billing/from-booking/{booking_id}`
 2. Backend creates one invoice item from booking service and booking price.
 3. Invoice starts as `issued`.
 4. Booking can only have one invoice because `booking_id` is unique in `invoices`.
@@ -519,13 +519,13 @@ Invoice PDF flow:
 ## 12. Payment Flow
 
 1. Admin creates payment:
-   - `POST /api/v1/payments`
+   - `POST /api/payments`
 2. If `invoice_id` is provided, backend verifies invoice exists.
 3. Payment is saved.
 4. Invoice paid amount is synchronized.
 5. Invoice status can become partially paid, paid, refunded, etc. based on values.
 6. Payment emails can be queued with:
-   - `POST /api/v1/payments/{payment_id}/mail/{template}`
+   - `POST /api/payments/{payment_id}/mail/{template}`
 
 ## 13. Mail Flow
 
@@ -587,7 +587,7 @@ Google login:
 
 ## 15. API Catalogue
 
-All paths below are under `/api/v1`.
+All paths below are under `/api`.
 
 ### Auth
 
@@ -977,7 +977,7 @@ Production checklist:
 - Configure explicit `BACKEND_CORS_ORIGINS`.
 - Configure `TRUSTED_HOSTS`.
 - Run `alembic upgrade head`.
-- Verify SMTP with `/api/v1/mail/smtp-status`.
+- Verify SMTP with `/api/mail/smtp-status`.
 - Rotate default admin password.
 - Run tests before release.
 

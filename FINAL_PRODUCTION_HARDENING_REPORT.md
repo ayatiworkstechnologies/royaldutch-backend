@@ -4,7 +4,7 @@ Date: 2026-06-13
 
 ## Result
 
-The Royal Dutch Medical Centre FastAPI backend has completed the final local production-hardening phase while preserving existing `/api/v1` endpoint URLs and backward-compatible response behavior.
+The Royal Dutch Medical Centre FastAPI backend has completed the final local production-hardening phase while preserving existing `/api` endpoint URLs and backward-compatible response behavior.
 
 Updated production-readiness score: **9.3/10**
 
