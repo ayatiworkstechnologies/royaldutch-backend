@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 
@@ -6,12 +8,17 @@ from app.api.deps import DbSession, get_current_user
 from app.core.permissions import require_permission
 from app.core.security import hash_password
 from app.models.booking import Booking
-from app.models.enums import RecordStatus, UserRole
+from app.models.enums import BookingStatus, RecordStatus, UserRole
+from app.models.patient import Patient
 from app.models.service import Service
 from app.models.staff import Staff, StaffAvailability
 from app.models.user import User
+from app.schemas.booking import BookingDetail
+from app.schemas.patient import PatientRead
+from app.schemas.patient_detail import PatientDetail
 from app.schemas.staff import StaffCreate, StaffRead, StaffUpdate
 from app.services.audit_service import model_snapshot, write_audit_log
+from app.services.patient_service import ensure_staff_treats_patient, get_patient_detail, list_patients_for_staff
 
 router = APIRouter(prefix="/staff", tags=["staff"])
 
@@ -112,3 +119,63 @@ def delete_staff(staff_id: int, db: DbSession, request: Request, user: User = De
     write_audit_log(db, action="staff.delete", entity_type="Staff", entity_id=staff_id, user=user, request=request, old_value=old_value)
     db.commit()
     return {"message": "Staff deleted"}
+
+
+def _to_booking_detail(booking: Booking) -> BookingDetail:
+    detail = BookingDetail.model_validate(booking)
+    detail.service_name = booking.service.name if booking.service else None
+    detail.staff_name = booking.staff.name if booking.staff else None
+    return detail
+
+
+def _get_staff_or_404(db: DbSession, staff_id: int) -> Staff:
+    staff = db.get(Staff, staff_id)
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff not found")
+    return staff
+
+
+@router.get(
+    "/{staff_id}/bookings",
+    response_model=list[BookingDetail],
+    dependencies=[Depends(require_permission("bookings.read"))],
+)
+def staff_bookings(
+    staff_id: int,
+    db: DbSession,
+    booking_date: date | None = Query(default=None),
+    status: BookingStatus | None = Query(default=None),
+) -> list[BookingDetail]:
+    _get_staff_or_404(db, staff_id)
+    query = (
+        select(Booking)
+        .where(Booking.staff_id == staff_id)
+        .options(joinedload(Booking.patient), joinedload(Booking.service), joinedload(Booking.staff))
+        .order_by(Booking.booking_date.desc(), Booking.booking_time.asc())
+    )
+    if booking_date:
+        query = query.where(Booking.booking_date == booking_date)
+    if status:
+        query = query.where(Booking.status == status)
+    return [_to_booking_detail(b) for b in db.scalars(query).unique().all()]
+
+
+@router.get(
+    "/{staff_id}/patients",
+    response_model=list[PatientRead],
+    dependencies=[Depends(require_permission("patients.read"))],
+)
+def staff_patients(staff_id: int, db: DbSession) -> list[Patient]:
+    _get_staff_or_404(db, staff_id)
+    return list_patients_for_staff(db, staff_id)
+
+
+@router.get(
+    "/{staff_id}/patients/{patient_id}",
+    response_model=PatientDetail,
+    dependencies=[Depends(require_permission("patients.read"))],
+)
+def staff_patient_detail(staff_id: int, patient_id: int, db: DbSession) -> Patient:
+    _get_staff_or_404(db, staff_id)
+    ensure_staff_treats_patient(db, staff_id, patient_id)
+    return get_patient_detail(db, patient_id)

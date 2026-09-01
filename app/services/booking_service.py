@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.status_reasons import is_valid_reason
 from app.models.booking import Booking, BookingSlotLock
 from app.models.billing import Invoice
 from app.models.enums import BookingStatus, InvoiceStatus, PaymentStatus, RecordStatus, UserRole
@@ -396,11 +397,15 @@ def update_booking_status(
     db: Session,
     booking: Booking,
     status_value: BookingStatus,
+    reason: str,
     notes: str | None = None,
 ) -> Booking:
     validate_status_transition(booking.status, status_value)
+    if not is_valid_reason(status_value, reason):
+        raise HTTPException(status_code=422, detail=f"Invalid reason for status {status_value}")
     ensure_booking_can_block_slot(db, booking, status_value)
     booking.status = status_value
+    booking.status_reason = reason
     if notes is not None:
         booking.notes = notes
     sync_booking_slot_lock(db, booking, status_value)

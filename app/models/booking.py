@@ -30,6 +30,7 @@ class Booking(TimestampMixin, Base):
         index=True,
     )
     notes: Mapped[str | None] = mapped_column(Text)
+    status_reason: Mapped[str | None] = mapped_column(String(120), nullable=True)
     first_visit: Mapped[bool] = mapped_column(default=True, nullable=False)
 
     patient = relationship("Patient", back_populates="bookings")

@@ -80,7 +80,7 @@ def update_my_booking_status(
     )
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
-    set_booking_status(db, booking, data.status, data.notes)
+    set_booking_status(db, booking, data.status, data.reason, data.notes)
     template = template_for_status(data.status)
     if template:
         mail = create_booking_mail(booking, template, db=db)

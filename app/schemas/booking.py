@@ -44,6 +44,7 @@ class BookingUpdate(ORMModel):
 
 class BookingStatusUpdate(ORMModel):
     status: BookingStatus
+    reason: str
     notes: str | None = None
 
 
@@ -60,6 +61,7 @@ class BookingRead(Timestamped):
     currency: str
     status: BookingStatus
     notes: str | None
+    status_reason: str | None
     first_visit: bool
 
 
