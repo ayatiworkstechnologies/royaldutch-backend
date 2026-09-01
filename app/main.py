@@ -24,7 +24,7 @@ async def process_mail_queue():
         try:
             with SessionLocal() as db:
                 recover_stale_processing_mail(db)
-                messages = claim_queued_mail(db, limit=10)
+                messages = claim_queued_mail(db, limit=10, include_failed=True)
                 if messages:
                     for mail in messages:
                         process_claimed_mail(db, mail)

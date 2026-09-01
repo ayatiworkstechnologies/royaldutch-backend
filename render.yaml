@@ -47,3 +47,5 @@ services:
         value: Royal Dutch Medical Centre
       - key: SMTP_USE_SSL
         value: true
+      - key: ENABLE_IN_PROCESS_WORKER
+        value: true
