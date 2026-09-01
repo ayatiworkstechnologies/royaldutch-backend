@@ -44,6 +44,7 @@ class BookingUpdate(ORMModel):
 
 class BookingStatusUpdate(ORMModel):
     status: BookingStatus
+    notes: str | None = None
 
 
 class BookingRead(Timestamped):

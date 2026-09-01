@@ -17,6 +17,7 @@ from app.api.routes import (
     patients,
     patient_documents,
     payments,
+    prescriptions,
     reports,
     services,
     settings,
@@ -40,6 +41,7 @@ api_router.include_router(bookings.router)
 api_router.include_router(patients.router)
 api_router.include_router(patient_documents.router)
 api_router.include_router(payments.router)
+api_router.include_router(prescriptions.router)
 api_router.include_router(reports.router)
 api_router.include_router(billing.router)
 api_router.include_router(mail.router)

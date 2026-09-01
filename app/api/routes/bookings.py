@@ -157,7 +157,7 @@ def update_booking_status(booking_id: int, data: BookingStatusUpdate, db: DbSess
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
     old_value = model_snapshot(booking)
-    set_booking_status(db, booking, data.status)
+    set_booking_status(db, booking, data.status, data.notes)
     template = template_for_status(data.status)
     if template:
         mail = create_booking_mail(booking, template, db=db)

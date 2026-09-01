@@ -392,10 +392,17 @@ def update_booking(db: Session, booking: Booking, data: BookingUpdate) -> Bookin
     return booking
 
 
-def update_booking_status(db: Session, booking: Booking, status_value: BookingStatus) -> Booking:
+def update_booking_status(
+    db: Session,
+    booking: Booking,
+    status_value: BookingStatus,
+    notes: str | None = None,
+) -> Booking:
     validate_status_transition(booking.status, status_value)
     ensure_booking_can_block_slot(db, booking, status_value)
     booking.status = status_value
+    if notes is not None:
+        booking.notes = notes
     sync_booking_slot_lock(db, booking, status_value)
     return booking
 

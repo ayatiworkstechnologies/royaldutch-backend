@@ -38,7 +38,7 @@ def run_migrations_online() -> None:
     connect_args = {}
     url = make_url(configuration["sqlalchemy.url"])
     if settings.database_ssl and url.drivername.startswith("mysql"):
-        connect_args["ssl"] = {}
+        connect_args["ssl"] = {"check_hostname": bool(settings.database_ssl_verify_identity)}
         if settings.database_ssl_ca_path:
             connect_args["ssl_ca"] = settings.database_ssl_ca_path
         connect_args["ssl_verify_identity"] = settings.database_ssl_verify_identity

@@ -10,6 +10,7 @@ from app.models.mail import MailMessage
 from app.models.patient import Patient
 from app.models.patient_document import PatientDocument
 from app.models.payment import Payment
+from app.models.prescription import Prescription
 from app.models.refresh_token import RefreshToken
 from app.models.service import Service
 from app.models.setting import ClinicSetting
@@ -32,6 +33,7 @@ __all__ = [
     "Patient",
     "PatientDocument",
     "Payment",
+    "Prescription",
     "RefreshToken",
     "Service",
     "ClinicSetting",

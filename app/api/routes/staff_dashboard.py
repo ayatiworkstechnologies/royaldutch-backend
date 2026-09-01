@@ -7,11 +7,18 @@ from sqlalchemy.orm import joinedload
 from app.api.deps import DbSession, get_current_user
 from app.models.booking import Booking
 from app.models.enums import BookingStatus
+from app.models.patient import Patient
+from app.models.prescription import Prescription
 from app.models.staff import Staff
 from app.models.user import User
 from app.schemas.booking import BookingDetail, BookingStatusUpdate, BookingRead
+from app.schemas.patient import PatientRead
+from app.schemas.patient_detail import PatientDetail
+from app.schemas.prescription import PrescriptionCreate, PrescriptionRead
 from app.services.booking_service import update_booking_status as set_booking_status
 from app.services.mail_service import create_booking_mail, template_for_status
+from app.services.patient_service import ensure_staff_treats_patient, get_patient_detail, list_patients_for_staff
+from app.services.prescription_service import create_prescription, list_prescriptions_for_booking
 
 router = APIRouter(prefix="/staff/me", tags=["staff dashboard"])
 
@@ -73,7 +80,7 @@ def update_my_booking_status(
     )
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
-    set_booking_status(db, booking, data.status)
+    set_booking_status(db, booking, data.status, data.notes)
     template = template_for_status(data.status)
     if template:
         mail = create_booking_mail(booking, template, db=db)
@@ -82,3 +89,48 @@ def update_my_booking_status(
     db.commit()
     db.refresh(booking)
     return booking
+
+
+def _my_booking(db: DbSession, booking_id: int, user: User) -> Booking:
+    if not user.staff_id:
+        raise HTTPException(status_code=403, detail="No staff profile linked to this account")
+    booking = db.scalar(select(Booking).where(Booking.id == booking_id, Booking.staff_id == user.staff_id))
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    return booking
+
+
+@router.get("/bookings/{booking_id}/prescriptions", response_model=list[PrescriptionRead])
+def my_booking_prescriptions(
+    booking_id: int,
+    db: DbSession,
+    user: User = Depends(_require_clinical),
+) -> list[Prescription]:
+    _my_booking(db, booking_id, user)
+    return list_prescriptions_for_booking(db, booking_id)
+
+
+@router.post("/bookings/{booking_id}/prescriptions", response_model=PrescriptionRead)
+def add_my_booking_prescription(
+    booking_id: int,
+    data: PrescriptionCreate,
+    db: DbSession,
+    user: User = Depends(_require_clinical),
+) -> Prescription:
+    booking = _my_booking(db, booking_id, user)
+    return create_prescription(db, booking, data, user)
+
+
+@router.get("/patients", response_model=list[PatientRead])
+def my_patients(db: DbSession, user: User = Depends(_require_clinical)) -> list[Patient]:
+    if not user.staff_id:
+        return []
+    return list_patients_for_staff(db, user.staff_id)
+
+
+@router.get("/patients/{patient_id}", response_model=PatientDetail)
+def my_patient_detail(patient_id: int, db: DbSession, user: User = Depends(_require_clinical)) -> Patient:
+    if not user.staff_id:
+        raise HTTPException(status_code=403, detail="No staff profile linked to this account")
+    ensure_staff_treats_patient(db, user.staff_id, patient_id)
+    return get_patient_detail(db, patient_id)

@@ -36,6 +36,7 @@ class Booking(TimestampMixin, Base):
     service = relationship("Service", back_populates="bookings")
     staff = relationship("Staff", back_populates="bookings")
     payments = relationship("Payment", back_populates="booking", cascade="all, delete-orphan")
+    prescriptions = relationship("Prescription", back_populates="booking", cascade="all, delete-orphan")
 
 
 class BookingSlotLock(TimestampMixin, Base):

@@ -23,7 +23,7 @@ connect_args = {}
 if database_url.drivername.startswith("sqlite"):
     connect_args["check_same_thread"] = False
 if settings.database_ssl and database_url.drivername.startswith("mysql"):
-    connect_args["ssl"] = {}
+    connect_args["ssl"] = {"check_hostname": bool(settings.database_ssl_verify_identity)}
     if settings.database_ssl_ca_path and os.path.isfile(settings.database_ssl_ca_path):
         connect_args["ssl_ca"] = settings.database_ssl_ca_path
     connect_args["ssl_verify_identity"] = settings.database_ssl_verify_identity

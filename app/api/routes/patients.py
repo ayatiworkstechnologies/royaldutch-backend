@@ -6,7 +6,9 @@ from app.core.permissions import require_permission
 from app.models.patient import Patient
 from app.models.user import User
 from app.schemas.patient import PatientCreate, PatientRead, PatientUpdate
+from app.schemas.patient_detail import PatientDetail
 from app.services.audit_service import model_snapshot, write_audit_log
+from app.services.patient_service import get_patient_detail
 from app.utils.pagination import paginate_query
 
 router = APIRouter(prefix="/patients", tags=["patients"])
@@ -25,6 +27,11 @@ def list_patients(
     if page is not None and limit is not None:
         return paginate_query(db, query, page, limit)
     return list(db.scalars(query).all())
+
+
+@router.get("/{patient_id}", response_model=PatientDetail, dependencies=[Depends(require_permission("patients.read"))])
+def get_patient(patient_id: int, db: DbSession) -> Patient:
+    return get_patient_detail(db, patient_id)
 
 
 @router.post("", response_model=PatientRead, dependencies=[Depends(require_permission("patients.manage"))])
