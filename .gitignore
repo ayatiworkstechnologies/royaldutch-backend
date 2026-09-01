@@ -4,7 +4,9 @@ __pycache__/
 *$py.class
 
 # Environments
-.env
+.env*
+!.env.example
+!.env.render.example
 .venv
 env/
 venv/
@@ -22,8 +24,14 @@ Thumbs.db
 .pytest_cache/
 pytest-cache-files-*/
 .mypy_cache/
+.ruff_cache/
 .coverage
 htmlcov/
+
+# Logs and local uploads
+*.log
+logs/
+patient_documents/
 
 # Python packaging & builds
 build/
