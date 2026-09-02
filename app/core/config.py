@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     smtp_from_name: str = "Royal Dutch Medical Centre"
     smtp_use_ssl: bool = True
     smtp_use_tls: bool = True
+    resend_api_key: str = ""
     google_client_id: str = ""
     trusted_hosts: str = ""
     run_startup_seeders: bool = True

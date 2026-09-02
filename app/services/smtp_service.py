@@ -1,13 +1,17 @@
+import base64
 import re
 import smtplib
 from email.message import EmailMessage
 from email.utils import formataddr, parseaddr
+
+import httpx
 
 from app.core.config import get_settings
 from app.models.enums import MailStatus
 from app.models.mail import MailMessage
 
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+RESEND_API_URL = "https://api.resend.com/emails"
 
 
 def split_emails(value: str | None) -> list[str]:
@@ -39,7 +43,32 @@ def html_to_text(value: str) -> str:
 
 def check_smtp_connection() -> dict:
     settings = get_settings()
+    if settings.resend_api_key:
+        result = {
+            "provider": "resend",
+            "configured": bool(settings.mail_from),
+            "from_email": settings.mail_from,
+            "ok": False,
+            "error": None,
+        }
+        if not result["configured"]:
+            result["error"] = "From email is missing"
+            return result
+        try:
+            response = httpx.get(
+                RESEND_API_URL,
+                headers={"Authorization": f"Bearer {settings.resend_api_key}"},
+                timeout=15,
+            )
+            result["ok"] = response.status_code < 500
+            if not result["ok"]:
+                result["error"] = f"Resend API error {response.status_code}"
+        except Exception as exc:
+            result["error"] = str(exc)
+        return result
+
     result = {
+        "provider": "smtp",
         "configured": bool(settings.smtp_host and settings.mail_from),
         "host": settings.smtp_host,
         "port": settings.smtp_port,
@@ -87,9 +116,9 @@ def sender_header() -> str:
 
 def send_mail_message(mail: MailMessage, attachments: list[tuple[str, bytes, str]] | None = None) -> MailMessage:
     settings = get_settings()
-    if not settings.smtp_host or not settings.mail_from:
+    if not settings.mail_from:
         mail.status = MailStatus.failed
-        mail.error_message = "SMTP host or from email is missing"
+        mail.error_message = "From email is missing"
         return mail
 
     to_emails = split_emails(mail.recipient_email)
@@ -104,6 +133,71 @@ def send_mail_message(mail: MailMessage, attachments: list[tuple[str, bytes, str
     if bad_emails:
         mail.status = MailStatus.failed
         mail.error_message = f"Invalid email address: {', '.join(bad_emails)}"
+        return mail
+
+    if settings.resend_api_key:
+        return _send_via_resend(mail, to_emails, cc_emails, bcc_emails, attachments)
+    return _send_via_smtp(mail, to_emails, cc_emails, all_recipients, attachments)
+
+
+def _send_via_resend(
+    mail: MailMessage,
+    to_emails: list[str],
+    cc_emails: list[str],
+    bcc_emails: list[str],
+    attachments: list[tuple[str, bytes, str]] | None,
+) -> MailMessage:
+    settings = get_settings()
+    payload: dict = {
+        "from": sender_header(),
+        "to": to_emails,
+        "subject": mail.subject,
+    }
+    if cc_emails:
+        payload["cc"] = cc_emails
+    if bcc_emails:
+        payload["bcc"] = bcc_emails
+    if is_html_body(mail.body):
+        payload["html"] = mail.body
+        payload["text"] = html_to_text(mail.body)
+    else:
+        payload["text"] = mail.body
+    if attachments:
+        payload["attachments"] = [
+            {"filename": filename, "content": base64.b64encode(content).decode("ascii")}
+            for filename, content, _mime_type in attachments
+        ]
+
+    try:
+        response = httpx.post(
+            RESEND_API_URL,
+            headers={"Authorization": f"Bearer {settings.resend_api_key}"},
+            json=payload,
+            timeout=30,
+        )
+        if response.status_code >= 400:
+            mail.status = MailStatus.failed
+            mail.error_message = f"Resend API error {response.status_code}: {response.text[:300]}"
+        else:
+            mail.status = MailStatus.sent
+            mail.error_message = None
+    except Exception as exc:
+        mail.status = MailStatus.failed
+        mail.error_message = str(exc)
+    return mail
+
+
+def _send_via_smtp(
+    mail: MailMessage,
+    to_emails: list[str],
+    cc_emails: list[str],
+    all_recipients: list[str],
+    attachments: list[tuple[str, bytes, str]] | None,
+) -> MailMessage:
+    settings = get_settings()
+    if not settings.smtp_host:
+        mail.status = MailStatus.failed
+        mail.error_message = "SMTP host is missing"
         return mail
 
     message = EmailMessage()

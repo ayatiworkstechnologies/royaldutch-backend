@@ -31,6 +31,8 @@ services:
         value: true
       - key: SECRET_KEY
         generateValue: true
+      - key: RESEND_API_KEY
+        sync: false
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT
