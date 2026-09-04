@@ -30,10 +30,14 @@ def serialize_staff(staff: Staff) -> StaffRead:
 
 
 @router.get("", response_model=list[StaffRead])
-def list_staff(db: DbSession) -> list[StaffRead]:
-    staff_members = db.scalars(
-        select(Staff).options(joinedload(Staff.services), joinedload(Staff.availability)).order_by(Staff.name)
-    ).unique().all()
+def list_staff(
+    db: DbSession,
+    include_inactive: bool = Query(default=False),
+) -> list[StaffRead]:
+    query = select(Staff).options(joinedload(Staff.services), joinedload(Staff.availability)).order_by(Staff.name)
+    if not include_inactive:
+        query = query.where(Staff.status == RecordStatus.active)
+    staff_members = db.scalars(query).unique().all()
     return [serialize_staff(staff) for staff in staff_members]
 
 

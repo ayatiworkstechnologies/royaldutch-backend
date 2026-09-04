@@ -24,17 +24,28 @@ def list_services(
 ) -> list[Service]:
     query = select(Service).options(joinedload(Service.category)).order_by(Service.external_id, Service.name)
     if not include_inactive:
-        query = query.where(Service.status == RecordStatus.active)
+        query = query.join(Service.category).where(
+            Service.status == RecordStatus.active,
+            Category.status == RecordStatus.active,
+        )
     if category_slug:
-        query = query.join(Service.category).where(Category.slug == category_slug)
-        if not include_inactive:
-            query = query.where(Category.status == RecordStatus.active)
+        if include_inactive:
+            query = query.join(Service.category)
+        query = query.where(Category.slug == category_slug)
     return list(db.scalars(query).unique().all())
 
 
 @router.get("/{service_slug}", response_model=ServiceRead)
 def get_service(service_slug: str, db: DbSession) -> Service:
-    service = db.scalar(select(Service).where(Service.slug == service_slug, Service.status == RecordStatus.active))
+    service = db.scalar(
+        select(Service)
+        .join(Service.category)
+        .where(
+            Service.slug == service_slug,
+            Service.status == RecordStatus.active,
+            Category.status == RecordStatus.active,
+        )
+    )
     if not service:
         raise HTTPException(status_code=404, detail="Service not found")
     return service
