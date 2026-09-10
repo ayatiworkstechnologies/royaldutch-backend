@@ -121,6 +121,42 @@ def test_migration_backfills_large_ids_without_changing_relationships():
         assert connection.execute(text('SELECT display_id FROM categories WHERE id=30001')).scalar_one() == 8
         assert connection.execute(text('SELECT display_id, category_id FROM services')).one() == (1, 30001)
         assert connection.execute(text("SELECT value FROM catalog_sequences WHERE name='categories'")).scalar_one() == 8
+        migration.upgrade()  # A completed upgrade can safely run again.
+        assert connection.execute(text("SELECT value FROM catalog_sequences WHERE name='categories'")).scalar_one() == 8
         migration.downgrade()
         assert connection.execute(text('SELECT category_id FROM services')).scalar_one() == 30001
+    engine.dispose()
+
+
+@pytest.mark.parametrize('partial_columns', [False, True])
+def test_migration_resumes_existing_counter_table(partial_columns):
+    import importlib.util
+    from pathlib import Path
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    from sqlalchemy import text
+
+    path = Path(__file__).parents[1] / 'migrations/versions/20260910_0006_catalog_numbers.py'
+    spec = importlib.util.spec_from_file_location('resume_migration', path)
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    engine = create_engine('sqlite:///:memory:')
+    with engine.begin() as connection:
+        connection.execute(text('CREATE TABLE catalog_sequences (name VARCHAR(30) PRIMARY KEY, value INTEGER NOT NULL)'))
+        connection.execute(text('CREATE TABLE categories (id INTEGER PRIMARY KEY)'))
+        connection.execute(text('CREATE TABLE services (id INTEGER PRIMARY KEY)'))
+        connection.execute(text('INSERT INTO categories (id) VALUES (1), (30001)'))
+        connection.execute(text('INSERT INTO services (id) VALUES (30001)'))
+        if partial_columns:
+            connection.execute(text('ALTER TABLE categories ADD COLUMN display_id INTEGER'))
+            connection.execute(text('UPDATE categories SET display_id=1 WHERE id=1'))
+            connection.execute(text("INSERT INTO catalog_sequences VALUES ('categories', 5)"))
+        migration.op = Operations(MigrationContext.configure(connection))
+        migration.upgrade()
+        expected = 6 if partial_columns else 2
+        assert connection.execute(text('SELECT display_id FROM categories WHERE id=30001')).scalar_one() == expected
+        assert connection.execute(text('SELECT display_id FROM categories WHERE id=1')).scalar_one() == 1
+        assert connection.execute(text('SELECT display_id FROM services')).scalar_one() == 1
+        migration.upgrade()
+        assert connection.execute(text("SELECT value FROM catalog_sequences WHERE name='categories'")).scalar_one() == expected
     engine.dispose()
