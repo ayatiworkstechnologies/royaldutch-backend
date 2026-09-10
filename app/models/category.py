@@ -1,7 +1,8 @@
-from sqlalchemy import Enum, String, Text
+from sqlalchemy import event, Enum, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.catalog_sequence import assign_catalog_number
 from app.models.enums import RecordStatus
 from app.models.mixins import TimestampMixin
 
@@ -10,6 +11,7 @@ class Category(TimestampMixin, Base):
     __tablename__ = "categories"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    display_id: Mapped[int] = mapped_column(unique=True, nullable=False)
     external_id: Mapped[int | None] = mapped_column(unique=True, nullable=True)
     name: Mapped[str] = mapped_column(String(150), unique=True, nullable=False)
     slug: Mapped[str] = mapped_column(String(180), unique=True, index=True, nullable=False)
@@ -21,3 +23,6 @@ class Category(TimestampMixin, Base):
     )
 
     services = relationship("Service", back_populates="category", cascade="all, delete-orphan")
+
+
+event.listen(Category, "before_insert", assign_catalog_number)

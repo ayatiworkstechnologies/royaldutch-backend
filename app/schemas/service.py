@@ -39,6 +39,8 @@ class ServiceUpdate(ORMModel):
 
 class ServiceRead(ServiceBase, Timestamped):
     id: int
+    display_id: int
+    category_name: str | None = None
 
 
 class ServiceWithCategory(ServiceRead):

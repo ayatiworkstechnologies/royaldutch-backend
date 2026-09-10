@@ -1,9 +1,10 @@
 from decimal import Decimal
 
-from sqlalchemy import Enum, ForeignKey, Numeric, String, Text
+from sqlalchemy import event, Enum, ForeignKey, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.catalog_sequence import assign_catalog_number
 from app.models.enums import RecordStatus
 from app.models.mixins import TimestampMixin
 
@@ -12,6 +13,7 @@ class Service(TimestampMixin, Base):
     __tablename__ = "services"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    display_id: Mapped[int] = mapped_column(unique=True, nullable=False)
     external_id: Mapped[int | None] = mapped_column(unique=True, nullable=True)
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(180), nullable=False)
@@ -30,3 +32,10 @@ class Service(TimestampMixin, Base):
     category = relationship("Category", back_populates="services")
     staff = relationship("Staff", secondary="staff_services", back_populates="services")
     bookings = relationship("Booking", back_populates="service")
+
+    @property
+    def category_name(self) -> str | None:
+        return self.category.name if self.category else None
+
+
+event.listen(Service, "before_insert", assign_catalog_number)

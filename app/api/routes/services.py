@@ -8,9 +8,9 @@ from app.models.booking import Booking
 from app.models.category import Category
 from app.models.enums import RecordStatus
 from app.models.service import Service
-from app.models.staff import Staff
 from app.models.user import User
 from app.schemas.service import ServiceCreate, ServiceRead, ServiceUpdate
+from app.services.catalog_validation import commit_catalog, resolve_staff, validate_catalog_values
 from app.services.audit_service import model_snapshot, write_audit_log
 
 router = APIRouter(prefix="/services", tags=["services"])
@@ -22,7 +22,7 @@ def list_services(
     category_slug: str | None = Query(default=None),
     include_inactive: bool = Query(default=False),
 ) -> list[Service]:
-    query = select(Service).options(joinedload(Service.category)).order_by(Service.external_id, Service.name)
+    query = select(Service).options(joinedload(Service.category)).order_by(Service.display_id)
     if not include_inactive:
         query = query.join(Service.category).where(
             Service.status == RecordStatus.active,
@@ -53,12 +53,13 @@ def get_service(service_slug: str, db: DbSession) -> Service:
 
 @router.post("", response_model=ServiceRead, dependencies=[Depends(require_permission("services.manage"))])
 def create_service(data: ServiceCreate, db: DbSession, request: Request, user: User = Depends(get_current_user)) -> Service:
+    validate_catalog_values(db, Service, data.model_dump())
     staff_ids = data.staff_ids
     service = Service(**data.model_dump(exclude={"staff_ids"}))
     if staff_ids:
-        service.staff = list(db.scalars(select(Staff).where(Staff.id.in_(staff_ids))).all())
+        service.staff = resolve_staff(db, staff_ids)
     db.add(service)
-    db.commit()
+    commit_catalog(db)
     db.refresh(service)
     write_audit_log(db, action="service.create", entity_type="Service", entity_id=service.id, user=user, request=request, new_value=model_snapshot(service))
     db.commit()
@@ -72,12 +73,14 @@ def update_service(service_id: int, data: ServiceUpdate, db: DbSession, request:
         raise HTTPException(status_code=404, detail="Service not found")
     old_value = model_snapshot(service)
     update_data = data.model_dump(exclude_unset=True)
+    validate_catalog_values(db, Service, update_data, service.id)
     staff_ids = update_data.pop("staff_ids", None)
+    staff = resolve_staff(db, staff_ids) if staff_ids is not None else None
     for field, value in update_data.items():
         setattr(service, field, value)
-    if staff_ids is not None:
-        service.staff = list(db.scalars(select(Staff).where(Staff.id.in_(staff_ids))).all())
-    db.commit()
+    if staff is not None:
+        service.staff = staff
+    commit_catalog(db)
     db.refresh(service)
     write_audit_log(db, action="service.update", entity_type="Service", entity_id=service.id, user=user, request=request, old_value=old_value, new_value=model_snapshot(service))
     db.commit()

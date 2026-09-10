@@ -24,3 +24,4 @@ class CategoryUpdate(ORMModel):
 
 class CategoryRead(CategoryBase, Timestamped):
     id: int
+    display_id: int

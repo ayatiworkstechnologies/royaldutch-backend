@@ -548,3 +548,17 @@ When `REDIS_URL` is set, login and OTP limits are shared across API instances th
 - If using an existing manually-created database, verify schema first, then run `alembic stamp head`.
 - If queued mail is not sending, run `python -m app.workers.mail_worker` and check `mail_messages.error_message`.
 - If rate limits block tests or local manual attempts, restart the process; the local limiter is in-memory.
+
+### Persistent catalog numbering (20260910_0006)
+
+Before starting the updated backend against an existing database, run
+`python -m alembic upgrade head` from the backend directory. Deploy the backend
+and admin frontend together. Local `create_all` does not upgrade existing tables.
+
+The migration assigns categories and services independent `display_id` sequences
+in database-ID order. Existing primary keys and foreign keys are preserved.
+API responses expose both `id` (used for requests/relationships) and `display_id`
+(shown to administrators). Counters allocate future numbers transactionally,
+including seed inserts; numbers are never reused after deletion. Filtering and
+status changes do not change numbers. Do not use bulk SQL inserts that bypass
+ORM insert events without allocating a counter number in the same transaction.

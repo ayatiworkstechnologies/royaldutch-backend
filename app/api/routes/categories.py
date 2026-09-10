@@ -8,6 +8,7 @@ from app.models.enums import RecordStatus
 from app.models.service import Service
 from app.models.user import User
 from app.schemas.category import CategoryCreate, CategoryRead, CategoryUpdate
+from app.services.catalog_validation import commit_catalog, validate_catalog_values
 from app.services.audit_service import model_snapshot, write_audit_log
 
 router = APIRouter(prefix="/categories", tags=["categories"])
@@ -18,7 +19,7 @@ def list_categories(
     db: DbSession,
     include_inactive: bool = Query(default=False),
 ) -> list[Category]:
-    query = select(Category).order_by(Category.external_id, Category.name)
+    query = select(Category).order_by(Category.display_id)
     if not include_inactive:
         query = query.where(Category.status == RecordStatus.active)
     return list(db.scalars(query).all())
@@ -26,9 +27,10 @@ def list_categories(
 
 @router.post("", response_model=CategoryRead, dependencies=[Depends(require_permission("categories.manage"))])
 def create_category(data: CategoryCreate, db: DbSession, request: Request, user: User = Depends(get_current_user)) -> Category:
+    validate_catalog_values(db, Category, data.model_dump())
     category = Category(**data.model_dump())
     db.add(category)
-    db.commit()
+    commit_catalog(db)
     db.refresh(category)
     write_audit_log(db, action="category.create", entity_type="Category", entity_id=category.id, user=user, request=request, new_value=model_snapshot(category))
     db.commit()
@@ -41,9 +43,11 @@ def update_category(category_id: int, data: CategoryUpdate, db: DbSession, reque
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
     old_value = model_snapshot(category)
-    for field, value in data.model_dump(exclude_unset=True).items():
+    values = data.model_dump(exclude_unset=True)
+    validate_catalog_values(db, Category, values, category.id)
+    for field, value in values.items():
         setattr(category, field, value)
-    db.commit()
+    commit_catalog(db)
     db.refresh(category)
     write_audit_log(db, action="category.update", entity_type="Category", entity_id=category.id, user=user, request=request, old_value=old_value, new_value=model_snapshot(category))
     db.commit()
