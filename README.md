@@ -562,3 +562,24 @@ API responses expose both `id` (used for requests/relationships) and `display_id
 including seed inserts; numbers are never reused after deletion. Filtering and
 status changes do not change numbers. Do not use bulk SQL inserts that bypass
 ORM insert events without allocating a counter number in the same transaction.
+# Sub-services
+
+Apply the schema migration with `alembic upgrade head` before using sub-services.
+Each service can contain multiple sub-services. Use the parent service's database
+`id` in these routes (not its `display_id` or `external_id`):
+
+- `GET /api/services/{service_id}/sub-services` lists active sub-services; pass `include_inactive=true` for management.
+- `POST /api/services/{service_id}/sub-services` adds a sub-service.
+- `PATCH /api/services/{service_id}/sub-services/{sub_service_id}` edits it.
+- `DELETE /api/services/{service_id}/sub-services/{sub_service_id}` removes it.
+
+Writes require the existing `services.manage` permission. Example create body:
+
+```json
+{"name":"Home Nursing","slug":"home-nursing","description":"Nursing care at home","duration_minutes":60,"price":150,"currency":"AED","status":"active"}
+```
+
+Slugs are unique within a parent service. Public lists require an active parent
+service and category. Deleting a service also deletes its sub-services; a service
+with bookings retains the existing behavior of being marked inactive instead.
+Sub-services are catalog entries; bookings continue to reference the parent service.

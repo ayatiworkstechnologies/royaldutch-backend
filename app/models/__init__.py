@@ -13,6 +13,7 @@ from app.models.payment import Payment
 from app.models.prescription import Prescription
 from app.models.refresh_token import RefreshToken
 from app.models.service import Service
+from app.models.sub_service import SubService
 from app.models.setting import ClinicSetting
 from app.models.staff import Staff, StaffAvailability, staff_services
 from app.models.contact import Contact
