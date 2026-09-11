@@ -16,6 +16,7 @@ from app.models.notification import Notification
 from app.models.patient import Patient
 from app.models.payment import Payment
 from app.models.service import Service
+from app.models.sub_service import SubService
 from app.models.staff import Staff, StaffAvailability
 from app.models.user import User
 from app.schemas.booking import BookingCreate, BookingUpdate
@@ -311,6 +312,26 @@ def create_booking(db: Session, data: BookingCreate) -> Booking:
     if not service or service.status != RecordStatus.active:
         raise HTTPException(status_code=404, detail="Service not found or inactive")
 
+    upgrade_ids = set(data.sub_service_ids)
+    upgrades = list(db.scalars(select(SubService).where(
+        SubService.id.in_(upgrade_ids),
+        SubService.service_id == service.id,
+        SubService.status == RecordStatus.active,
+    )).all()) if upgrade_ids else []
+    if len(upgrades) != len(upgrade_ids):
+        raise HTTPException(status_code=422, detail="One or more booking upgrades are no longer available for this service")
+    if any(item.currency != service.currency for item in upgrades):
+        raise HTTPException(status_code=422, detail="Booking upgrades must use the service currency")
+    price = None if service.price is None or any(item.price is None for item in upgrades) else service.price + sum((item.price for item in upgrades), Decimal("0"))
+    notes = data.notes
+    if upgrades:
+        snapshot = "Booking upgrades:\n" + "\n".join(
+            f"- {item.name} (#{item.id}): {item.currency} {item.price:.2f}" if item.price is not None
+            else f"- {item.name} (#{item.id}): Price on request"
+            for item in upgrades
+        )
+        notes = "\n\n".join(part for part in (notes, snapshot) if part)
+
     # Auto-assign best available staff — may return None (admin assigns later)
     staff = find_staff_for_booking(db, service.id, data.booking_date, data.booking_time, data.staff_id)
     patient = get_or_create_patient(db, data.patient)
@@ -324,9 +345,9 @@ def create_booking(db: Session, data: BookingCreate) -> Booking:
             booking_date=data.booking_date,
             booking_time=data.booking_time,
             duration_minutes=service.duration_minutes,
-            price=service.price,
+            price=price,
             currency=service.currency,
-            notes=data.notes,
+            notes=notes,
             first_visit=data.first_visit,
             status=BookingStatus.pending,
         )

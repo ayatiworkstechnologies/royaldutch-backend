@@ -1,7 +1,7 @@
 from datetime import date, time
 from decimal import Decimal
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 
 from app.models.enums import BookingStatus
 from app.schemas.common import ORMModel, Timestamped
@@ -10,6 +10,7 @@ from app.schemas.patient import PatientCreate, PatientRead
 
 class BookingCreate(ORMModel):
     service_id: int
+    sub_service_ids: list[int] = Field(default_factory=list, max_length=100)
     staff_id: int | None = None
     booking_date: date
     booking_time: time

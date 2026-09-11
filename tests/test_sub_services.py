@@ -1,4 +1,6 @@
 import pytest
+from datetime import date, timedelta
+from decimal import Decimal
 from fastapi import HTTPException
 from pydantic import ValidationError
 from sqlalchemy import create_engine, select
@@ -11,6 +13,8 @@ from app.models.sub_service import SubService
 from app.models.enums import RecordStatus
 from app.schemas.sub_service import SubServiceCreate, SubServiceUpdate, SubServiceRead
 from app.api.routes.sub_services import create_sub_service, update_sub_service, delete_sub_service, list_sub_services
+from app.schemas.booking import BookingCreate
+from app.services.booking_service import create_booking
 
 
 @pytest.fixture
@@ -29,6 +33,46 @@ def db():
 
 def create(db, parent=1):
     return create_sub_service(parent, SubServiceCreate(name="Nursing", slug="nursing", price="10.50"), db, None, None)
+
+
+def booking_data(ids):
+    return BookingCreate(service_id=1, sub_service_ids=ids,
+        booking_date=date.today() + timedelta(days=1), booking_time="10:00",
+        patient={"full_name": "Upgrade Patient", "phone": "+971501234567"}, notes="Patient request")
+
+
+def test_booking_upgrade_total_and_snapshot(db):
+    child = create(db)
+    db.get(Service, 1).price = Decimal("100.00")
+    db.commit()
+    booking = create_booking(db, booking_data([child.id, child.id]))
+    assert booking.price == Decimal("110.50")
+    assert "Patient request" in booking.notes
+    assert booking.notes.count("Nursing") == 1
+    assert "AED 10.50" in booking.notes
+
+
+@pytest.mark.parametrize("invalid", ["parent", "inactive", "currency", "missing"])
+def test_booking_rejects_invalid_upgrade(db, invalid):
+    child = create(db, 2 if invalid == "parent" else 1)
+    if invalid == "inactive":
+        child.status = RecordStatus.inactive
+    if invalid == "currency":
+        child.currency = "USD"
+    db.commit()
+    with pytest.raises(HTTPException) as error:
+        create_booking(db, booking_data([9999 if invalid == "missing" else child.id]))
+    assert error.value.status_code == 422
+
+
+def test_unpriced_upgrade_keeps_total_on_request(db):
+    child = create(db)
+    child.price = None
+    db.get(Service, 1).price = Decimal("100.00")
+    db.commit()
+    booking = create_booking(db, booking_data([child.id]))
+    assert booking.price is None
+    assert "Price on request" in booking.notes
 
 
 def test_crud_and_parent_scoping(db):
