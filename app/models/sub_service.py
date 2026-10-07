@@ -1,6 +1,4 @@
-from decimal import Decimal
-
-from sqlalchemy import Enum, ForeignKey, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Enum, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -18,7 +16,8 @@ class SubService(TimestampMixin, Base):
     slug: Mapped[str] = mapped_column(String(220))
     description: Mapped[str | None] = mapped_column(Text)
     duration_minutes: Mapped[int | None]
-    price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
+    # A string supports both exact prices ("200") and ranges ("200-500").
+    price: Mapped[str | None] = mapped_column(String(50))
     currency: Mapped[str] = mapped_column(String(10), default="AED")
     image: Mapped[str | None] = mapped_column(String(500))
     status: Mapped[RecordStatus] = mapped_column(Enum(RecordStatus), default=RecordStatus.active)

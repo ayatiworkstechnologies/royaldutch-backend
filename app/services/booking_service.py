@@ -322,11 +322,21 @@ def create_booking(db: Session, data: BookingCreate) -> Booking:
         raise HTTPException(status_code=422, detail="One or more booking upgrades are no longer available for this service")
     if any(item.currency != service.currency for item in upgrades):
         raise HTTPException(status_code=422, detail="Booking upgrades must use the service currency")
-    price = None if service.price is None or any(item.price is None for item in upgrades) else service.price + sum((item.price for item in upgrades), Decimal("0"))
+    def exact_upgrade_price(item: SubService) -> Decimal | None:
+        if item.price is None or "-" in item.price:
+            return None
+        return Decimal(item.price)
+
+    upgrade_prices = [exact_upgrade_price(item) for item in upgrades]
+    price = (
+        None
+        if service.price is None or any(item_price is None for item_price in upgrade_prices)
+        else service.price + sum((item_price for item_price in upgrade_prices if item_price is not None), Decimal("0"))
+    )
     notes = data.notes
     if upgrades:
         snapshot = "Booking upgrades:\n" + "\n".join(
-            f"- {item.name} (#{item.id}): {item.currency} {item.price:.2f}" if item.price is not None
+            f"- {item.name} (#{item.id}): {item.currency} {item.price}" if item.price is not None
             else f"- {item.name} (#{item.id}): Price on request"
             for item in upgrades
         )

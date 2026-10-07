@@ -52,6 +52,24 @@ def test_booking_upgrade_total_and_snapshot(db):
     assert "AED 10.50" in booking.notes
 
 
+def test_price_range_is_stored_and_makes_booking_total_on_request(db):
+    child = create_sub_service(
+        1,
+        SubServiceCreate(name="Home visit", slug="home-visit", price="200-500"),
+        db,
+        None,
+        None,
+    )
+    db.get(Service, 1).price = Decimal("100.00")
+    db.commit()
+
+    assert child.price == "200-500"
+    assert SubServiceRead.model_validate(child).price == "200-500"
+    booking = create_booking(db, booking_data([child.id]))
+    assert booking.price is None
+    assert "AED 200-500" in booking.notes
+
+
 @pytest.mark.parametrize("invalid", ["parent", "inactive", "currency", "missing"])
 def test_booking_rejects_invalid_upgrade(db, invalid):
     child = create(db, 2 if invalid == "parent" else 1)
@@ -114,7 +132,7 @@ def test_parent_visibility_and_deletion(db):
         create(db, 999)
 
 
-@pytest.mark.parametrize("values", [{"name": " "}, {"name": None}, {"status": None}, {"price": -1}, {"duration_minutes": 0}])
+@pytest.mark.parametrize("values", [{"name": " "}, {"name": None}, {"status": None}, {"price": -1}, {"price": "500-200"}, {"price": "200-x"}, {"duration_minutes": 0}])
 def test_invalid_updates(values):
     with pytest.raises(ValidationError):
         SubServiceUpdate(**values)

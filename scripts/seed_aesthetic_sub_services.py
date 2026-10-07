@@ -64,7 +64,7 @@ def upsert_items(db, service: Service, items: list[tuple[str, str, str, str | No
         else:
             updated += 1
         item.name = name
-        item.price = Decimal(price)
+        item.price = str(price)
         item.currency = "AED"
         item.description = description
         item.status = RecordStatus.active

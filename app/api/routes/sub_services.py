@@ -54,6 +54,17 @@ def list_sub_services(service_id: int, db: DbSession, include_inactive: bool = Q
 @router.post("", response_model=SubServiceRead, dependencies=manage)
 def create_sub_service(service_id: int, data: SubServiceCreate, db: DbSession, request: Request, user: User = Depends(get_current_user)):
     get_parent(db, service_id, include_inactive=False)
+    existing = db.scalar(
+        select(SubService).where(
+            SubService.service_id == service_id,
+            SubService.slug == data.slug,
+        )
+    )
+    if existing is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Sub-service slug '{data.slug}' already exists for this service; edit sub-service {existing.id} instead",
+        )
     child = SubService(service_id=service_id, **data.model_dump())
     db.add(child)
     # Flush through the shared conflict handler before recording the generated ID.

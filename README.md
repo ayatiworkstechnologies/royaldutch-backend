@@ -576,10 +576,13 @@ Each service can contain multiple sub-services. Use the parent service's databas
 Writes require the existing `services.manage` permission. Example create body:
 
 ```json
-{"name":"Home Nursing","slug":"home-nursing","description":"Nursing care at home","duration_minutes":60,"price":150,"currency":"AED","status":"active"}
+{"name":"Home Nursing","slug":"home-nursing","description":"Nursing care at home","duration_minutes":60,"price":"200-500","currency":"AED","status":"active"}
 ```
 
 Slugs are unique within a parent service. Public lists require an active parent
 service and category. Deleting a service also deletes its sub-services; a service
 with bookings retains the existing behavior of being marked inactive instead.
 Sub-services are catalog entries; bookings continue to reference the parent service.
+`price` accepts either an exact non-negative amount or a range such as `200-500`.
+Range-priced selections leave the booking total on request rather than choosing an
+endpoint, and their displayed range is copied into the booking notes.
