@@ -11,6 +11,7 @@ from app.schemas.patient import PatientCreate, PatientRead
 class BookingCreate(ORMModel):
     service_id: int
     sub_service_ids: list[int] = Field(default_factory=list, max_length=100)
+    package_ids: list[int] = Field(default_factory=list, max_length=100)
     staff_id: int | None = None
     booking_date: date
     booking_time: time

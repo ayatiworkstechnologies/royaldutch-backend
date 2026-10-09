@@ -20,6 +20,7 @@ from app.api.routes import (
     prescriptions,
     reports,
     services,
+    service_packages,
     sub_services,
     settings,
     staff,
@@ -38,6 +39,8 @@ api_router.include_router(categories.router)
 api_router.include_router(services.router)
 api_router.include_router(sub_services.router)
 api_router.include_router(sub_services.admin_router)
+api_router.include_router(service_packages.router)
+api_router.include_router(service_packages.admin_router)
 api_router.include_router(settings.router)
 # staff_dashboard's "/staff/me/..." routes must be registered before staff's
 # "/staff/{staff_id}/..." routes, or "me" gets swallowed as a staff_id and 422s.

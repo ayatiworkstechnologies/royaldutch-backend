@@ -14,6 +14,7 @@ from app.models.prescription import Prescription
 from app.models.refresh_token import RefreshToken
 from app.models.service import Service
 from app.models.sub_service import SubService
+from app.models.service_package import ServicePackage
 from app.models.setting import ClinicSetting
 from app.models.staff import Staff, StaffAvailability, staff_services
 from app.models.contact import Contact
@@ -37,6 +38,8 @@ __all__ = [
     "Prescription",
     "RefreshToken",
     "Service",
+    "SubService",
+    "ServicePackage",
     "ClinicSetting",
     "Staff",
     "StaffAvailability",

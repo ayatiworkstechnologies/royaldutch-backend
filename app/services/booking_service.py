@@ -17,6 +17,7 @@ from app.models.patient import Patient
 from app.models.payment import Payment
 from app.models.service import Service
 from app.models.sub_service import SubService
+from app.models.service_package import ServicePackage
 from app.models.staff import Staff, StaffAvailability
 from app.models.user import User
 from app.schemas.booking import BookingCreate, BookingUpdate
@@ -322,16 +323,32 @@ def create_booking(db: Session, data: BookingCreate) -> Booking:
         raise HTTPException(status_code=422, detail="One or more booking upgrades are no longer available for this service")
     if any(item.currency != service.currency for item in upgrades):
         raise HTTPException(status_code=422, detail="Booking upgrades must use the service currency")
+    package_ids = set(data.package_ids)
+    packages = list(db.scalars(
+        select(ServicePackage)
+        .join(SubService, ServicePackage.sub_service_id == SubService.id)
+        .where(
+            ServicePackage.id.in_(package_ids),
+            ServicePackage.status == RecordStatus.active,
+            SubService.service_id == service.id,
+            SubService.status == RecordStatus.active,
+        )
+    ).all()) if package_ids else []
+    if len(packages) != len(package_ids):
+        raise HTTPException(status_code=422, detail="One or more selected packages are no longer available for this service")
+    if any(item.currency != service.currency for item in packages):
+        raise HTTPException(status_code=422, detail="Selected packages must use the service currency")
     def exact_upgrade_price(item: SubService) -> Decimal | None:
         if item.price is None or "-" in item.price:
             return None
         return Decimal(item.price)
 
     upgrade_prices = [exact_upgrade_price(item) for item in upgrades]
+    package_prices = [exact_upgrade_price(item) for item in packages]
     price = (
         None
-        if service.price is None or any(item_price is None for item_price in upgrade_prices)
-        else service.price + sum((item_price for item_price in upgrade_prices if item_price is not None), Decimal("0"))
+        if service.price is None or any(item_price is None for item_price in [*upgrade_prices, *package_prices])
+        else service.price + sum((item_price for item_price in [*upgrade_prices, *package_prices] if item_price is not None), Decimal("0"))
     )
     notes = data.notes
     if upgrades:
@@ -339,6 +356,13 @@ def create_booking(db: Session, data: BookingCreate) -> Booking:
             f"- {item.name} (#{item.id}): {item.currency} {item.price}" if item.price is not None
             else f"- {item.name} (#{item.id}): Price on request"
             for item in upgrades
+        )
+        notes = "\n\n".join(part for part in (notes, snapshot) if part)
+    if packages:
+        snapshot = "Selected packages:\n" + "\n".join(
+            f"- {item.name} (#{item.id}): {item.currency} {item.price}" if item.price is not None
+            else f"- {item.name} (#{item.id}): Price on request"
+            for item in packages
         )
         notes = "\n\n".join(part for part in (notes, snapshot) if part)
 
