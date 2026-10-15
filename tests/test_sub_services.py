@@ -43,10 +43,8 @@ def booking_data(ids):
 
 def test_booking_upgrade_total_and_snapshot(db):
     child = create(db)
-    db.get(Service, 1).price = Decimal("100.00")
-    db.commit()
     booking = create_booking(db, booking_data([child.id, child.id]))
-    assert booking.price == Decimal("110.50")
+    assert booking.price == Decimal("10.50")
     assert "Patient request" in booking.notes
     assert booking.notes.count("Nursing") == 1
     assert "AED 10.50" in booking.notes
@@ -60,9 +58,6 @@ def test_price_range_is_stored_and_makes_booking_total_on_request(db):
         None,
         None,
     )
-    db.get(Service, 1).price = Decimal("100.00")
-    db.commit()
-
     assert child.price == "200-500"
     assert SubServiceRead.model_validate(child).price == "200-500"
     booking = create_booking(db, booking_data([child.id]))
@@ -86,7 +81,6 @@ def test_booking_rejects_invalid_upgrade(db, invalid):
 def test_unpriced_upgrade_keeps_total_on_request(db):
     child = create(db)
     child.price = None
-    db.get(Service, 1).price = Decimal("100.00")
     db.commit()
     booking = create_booking(db, booking_data([child.id]))
     assert booking.price is None

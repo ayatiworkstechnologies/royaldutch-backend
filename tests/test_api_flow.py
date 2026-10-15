@@ -169,8 +169,6 @@ def test_backend_api_end_to_end_flow():
                     "name": "API Flow Service",
                     "slug": "api-flow-service",
                     "description": "Test service",
-                    "duration_minutes": 30,
-                    "price": "125.00",
                     "currency": "AED",
                 },
             )
@@ -249,7 +247,7 @@ def test_backend_api_end_to_end_flow():
             client.patch(
                 f"/api/bookings/{booking['id']}/status",
                 headers=headers,
-                json={"status": "confirmed"},
+                json={"status": "confirmed", "reason": "Doctor available"},
             )
         )
         assert confirmed["status"] == "confirmed"
@@ -286,8 +284,8 @@ def test_backend_api_end_to_end_flow():
                 json={"tax_amount": "5.00"},
             )
         )
-        assert invoice["total_amount"] == "130.00"
-        assert invoice["balance_due"] == "130.00"
+        assert invoice["total_amount"] == "5.00"
+        assert invoice["balance_due"] == "5.00"
         assert_ok(client.get(f"/api/billing/{invoice['id']}", headers=headers))
         pdf_response = client.get(f"/api/billing/{invoice['id']}/pdf", headers=headers)
         assert pdf_response.status_code == 200, pdf_response.text
@@ -337,8 +335,8 @@ def test_backend_api_end_to_end_flow():
         assert_ok(client.get(f"/api/payments/{payment['id']}", headers=headers))
         synced_invoice = assert_ok(client.get("/api/billing", headers=headers))[0]
         assert synced_invoice["paid_amount"] == "50.00"
-        assert synced_invoice["balance_due"] == "80.00"
-        assert synced_invoice["status"] == "partially_paid"
+        assert synced_invoice["balance_due"] == "-45.00"
+        assert synced_invoice["status"] == "paid"
         assert_ok(client.post(f"/api/payments/{payment['id']}/mail/payment_received", headers=headers))
         assert_ok(
             client.patch(
@@ -350,7 +348,7 @@ def test_backend_api_end_to_end_flow():
         assert_ok(client.delete(f"/api/payments/{payment['id']}", headers=headers))
         invoice_after_delete = assert_ok(client.get(f"/api/billing/{invoice['id']}", headers=headers))
         assert invoice_after_delete["paid_amount"] == "0.00"
-        assert invoice_after_delete["balance_due"] == "130.00"
+        assert invoice_after_delete["balance_due"] == "5.00"
 
         mail = assert_ok(
             client.post(

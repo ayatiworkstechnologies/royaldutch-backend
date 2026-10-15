@@ -1,6 +1,4 @@
-from decimal import Decimal
-
-from sqlalchemy import event, Enum, ForeignKey, Numeric, String, Text
+from sqlalchemy import event, Enum, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -19,8 +17,6 @@ class Service(TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(180), nullable=False)
     slug: Mapped[str] = mapped_column(String(220), unique=True, index=True, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
-    duration_minutes: Mapped[int | None] = mapped_column(nullable=True)
-    price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     currency: Mapped[str] = mapped_column(String(10), default="AED", nullable=False)
     image: Mapped[str | None] = mapped_column(String(500))
     status: Mapped[RecordStatus] = mapped_column(

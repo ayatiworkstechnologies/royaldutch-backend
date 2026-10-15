@@ -1,35 +1,21 @@
-from decimal import Decimal
-
-import pytest
-from pydantic import ValidationError
-
 from app.schemas.service import ServiceCreate, ServiceUpdate
 
 
-def service_payload(price):
+def service_payload():
     return {
         "category_id": 1,
         "name": "Consultation",
         "slug": "consultation",
-        "price": price,
     }
 
 
-@pytest.mark.parametrize("price", ["", "   ", None])
-def test_create_service_treats_blank_price_as_none(price):
-    assert ServiceCreate(**service_payload(price)).price is None
+def test_service_schema_has_no_price_or_duration_fields():
+    service = ServiceCreate(**service_payload())
+    assert "price" not in service.model_fields_set
+    assert "duration_minutes" not in service.model_fields_set
 
 
-@pytest.mark.parametrize("price", [250, "250.50", "1,250.50"])
-def test_create_service_accepts_numeric_prices(price):
-    expected = Decimal(str(price).replace(",", ""))
-    assert ServiceCreate(**service_payload(price)).price == expected
-
-
-def test_update_service_treats_blank_price_as_none():
-    assert ServiceUpdate(price="").price is None
-
-
-def test_service_rejects_price_ranges():
-    with pytest.raises(ValidationError):
-        ServiceCreate(**service_payload("200-500"))
+def test_service_update_has_no_price_or_duration_fields():
+    update = ServiceUpdate(name="Updated consultation")
+    assert "price" not in update.model_fields_set
+    assert "duration_minutes" not in update.model_fields_set

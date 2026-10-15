@@ -141,8 +141,6 @@ def seed_categories_and_services(db: Session) -> list[Service]:
                     name=service_data["name"],
                     slug=service_data["slug"],
                     description=f"{service_data['name']} appointment service",
-                    duration_minutes=service_data["durationMinutes"],
-                    price=service_data["price"],
                     currency=service_data["currency"],
                     status=RecordStatus.active,
                 )

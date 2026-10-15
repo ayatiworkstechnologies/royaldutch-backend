@@ -73,8 +73,6 @@ def staff_date_booking_lock(staff_id: int, booking_date: date):
 
 
 def service_duration_minutes(service: Service | None) -> int:
-    if service and service.duration_minutes and service.duration_minutes > 0:
-        return service.duration_minutes
     return DEFAULT_SLOT_MINUTES
 
 
@@ -347,8 +345,8 @@ def create_booking(db: Session, data: BookingCreate) -> Booking:
     package_prices = [exact_upgrade_price(item) for item in packages]
     price = (
         None
-        if service.price is None or any(item_price is None for item_price in [*upgrade_prices, *package_prices])
-        else service.price + sum((item_price for item_price in [*upgrade_prices, *package_prices] if item_price is not None), Decimal("0"))
+        if any(item_price is None for item_price in [*upgrade_prices, *package_prices])
+        else sum((item_price for item_price in [*upgrade_prices, *package_prices] if item_price is not None), Decimal("0"))
     )
     notes = data.notes
     if upgrades:
@@ -378,7 +376,7 @@ def create_booking(db: Session, data: BookingCreate) -> Booking:
             staff_id=staff.id if staff else None,
             booking_date=data.booking_date,
             booking_time=data.booking_time,
-            duration_minutes=service.duration_minutes,
+            duration_minutes=DEFAULT_SLOT_MINUTES,
             price=price,
             currency=service.currency,
             notes=notes,
