@@ -13,6 +13,7 @@ ROLE_PERMISSIONS = {
 
     # admin — all operational access, view + update (Manager in UI)
     UserRole.admin: {
+        "users.manage",
         "dashboard.read",
         "reports.read",
         "bookings.read", "bookings.manage",
@@ -27,7 +28,6 @@ ROLE_PERMISSIONS = {
         "email_templates.read", "email_templates.manage",
         "notifications.read", "notifications.manage",
         "settings.read", "settings.manage",
-        "audit_logs.read",
     },
 
     # receptionist — booking workflow + billing + payments (Receptionist in UI)

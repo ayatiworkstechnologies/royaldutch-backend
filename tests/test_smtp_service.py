@@ -42,6 +42,7 @@ def configure_smtp(monkeypatch, **values):
         "SMTP_FROM_NAME": "Royal Dutch Medical Centre",
         "SMTP_USE_SSL": "false",
         "SMTP_USE_TLS": "true",
+        "MAIL_ENABLED": "true",
     }
     defaults.update(values)
     for key, value in defaults.items():
@@ -78,6 +79,7 @@ def test_send_mail_message_uses_starttls_and_sends_attachment(monkeypatch):
 
 
 def test_send_mail_message_reports_missing_settings(monkeypatch):
+    monkeypatch.setenv("MAIL_ENABLED", "true")
     monkeypatch.setenv("SMTP_HOST", "")
     monkeypatch.setenv("SMTP_FROM_EMAIL", "")
     monkeypatch.setenv("SMTP_USERNAME", "")

@@ -30,12 +30,11 @@ class Settings(BaseSettings):
     trusted_hosts: str = ""
     run_startup_seeders: bool = True
     enable_in_process_worker: bool = False
+    mail_enabled: bool = False
     redis_url: str = ""
-    patient_document_storage_dir: str = "patient_documents"
     whatsapp_provider: str = "noop"
     whatsapp_api_url: str = ""
     whatsapp_api_token: str = ""
-    whatsapp_from_number: str = ""
     anthropic_api_key: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")

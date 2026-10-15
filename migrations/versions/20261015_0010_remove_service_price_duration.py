@@ -5,6 +5,7 @@ Revises: 20261009_0009
 """
 
 from alembic import op
+import sqlalchemy as sa
 
 
 revision = "20261015_0010"
@@ -14,13 +15,13 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.drop_column("services", "price")
-    op.drop_column("services", "duration_minutes")
+    with op.batch_alter_table("services") as batch:
+        batch.drop_column("price")
+        batch.drop_column("duration_minutes")
 
 
 def downgrade() -> None:
     # Restoring these fields does not recover historic service values.
-    import sqlalchemy as sa
-
-    op.add_column("services", sa.Column("duration_minutes", sa.Integer(), nullable=True))
-    op.add_column("services", sa.Column("price", sa.Numeric(10, 2), nullable=True))
+    with op.batch_alter_table("services") as batch:
+        batch.add_column(sa.Column("duration_minutes", sa.Integer(), nullable=True))
+        batch.add_column(sa.Column("price", sa.Numeric(10, 2), nullable=True))

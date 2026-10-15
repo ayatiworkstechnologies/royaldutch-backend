@@ -51,3 +51,5 @@ services:
         value: true
       - key: ENABLE_IN_PROCESS_WORKER
         value: true
+      - key: MAIL_ENABLED
+        value: true

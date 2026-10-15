@@ -27,13 +27,13 @@ def upgrade() -> None:
             postgresql_using="price::text",
         )
     else:
-        op.alter_column(
-            "sub_services",
-            "price",
-            existing_type=sa.Numeric(10, 2),
-            type_=sa.String(50),
-            existing_nullable=True,
-        )
+        with op.batch_alter_table("sub_services") as batch:
+            batch.alter_column(
+                "price",
+                existing_type=sa.Numeric(10, 2),
+                type_=sa.String(50),
+                existing_nullable=True,
+            )
 
 
 def downgrade() -> None:
@@ -49,10 +49,10 @@ def downgrade() -> None:
             postgresql_using="price::numeric",
         )
     else:
-        op.alter_column(
-            "sub_services",
-            "price",
-            existing_type=sa.String(50),
-            type_=sa.Numeric(10, 2),
-            existing_nullable=True,
-        )
+        with op.batch_alter_table("sub_services") as batch:
+            batch.alter_column(
+                "price",
+                existing_type=sa.String(50),
+                type_=sa.Numeric(10, 2),
+                existing_nullable=True,
+            )

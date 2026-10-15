@@ -366,6 +366,14 @@ def create_booking(db: Session, data: BookingCreate) -> Booking:
 
     # Auto-assign best available staff — may return None (admin assigns later)
     staff = find_staff_for_booking(db, service.id, data.booking_date, data.booking_time, data.staff_id)
+    has_configured_staff = db.scalar(
+        select(Staff.id).join(Staff.services).where(
+            Staff.status == RecordStatus.active,
+            Service.id == service.id,
+        ).limit(1)
+    )
+    if not staff and (data.staff_id is not None or has_configured_staff is not None):
+        raise HTTPException(status_code=409, detail="No staff member is available for the selected slot")
     patient = get_or_create_patient(db, data.patient)
 
     for _ in range(3):
@@ -386,6 +394,14 @@ def create_booking(db: Session, data: BookingCreate) -> Booking:
         db.add(booking)
         try:
             db.flush()
+            if staff:
+                acquire_booking_slot_lock(
+                    db,
+                    staff.id,
+                    data.booking_date,
+                    data.booking_time,
+                    booking.id,
+                )
             db.add(
                 Notification(
                     booking_id=booking.id,
@@ -419,8 +435,8 @@ def update_booking(db: Session, booking: Booking, data: BookingUpdate) -> Bookin
 
     # Only check slot conflict when date or time is actually changing,
     # not when admin is just assigning/reassigning a staff member.
-    rescheduling = {"booking_date", "booking_time"} & update_data.keys()
-    if rescheduling:
+    slot_changed = {"booking_date", "booking_time", "staff_id"} & update_data.keys()
+    if slot_changed:
         if staff_id is not None:
             ensure_booking_slot_available(
                 db,
@@ -430,7 +446,7 @@ def update_booking(db: Session, booking: Booking, data: BookingUpdate) -> Bookin
                 booking.duration_minutes or DEFAULT_SLOT_MINUTES,
                 booking.id,
             )
-        if "status" not in update_data and booking.status not in TERMINAL_STATUSES:
+        if {"booking_date", "booking_time"} & update_data.keys() and "status" not in update_data and booking.status not in TERMINAL_STATUSES:
             update_data["status"] = BookingStatus.rescheduled
 
     if "status" in update_data:

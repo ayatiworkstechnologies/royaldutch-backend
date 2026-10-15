@@ -152,8 +152,6 @@ def test_booking_slot_lock_blocks_duplicate_and_releases_on_cancel():
             category_id=1,
             name="Lock Service",
             slug="lock-service",
-            duration_minutes=30,
-            price=Decimal("100.00"),
             currency="AED",
         )
         staff = Staff(name="Lock Staff", role="Doctor")
@@ -194,7 +192,7 @@ def test_booking_slot_lock_blocks_duplicate_and_releases_on_cancel():
         assert exc.value.status_code == 409
 
         booking = db.get(Booking, booking.id)
-        update_booking_status(db, booking, BookingStatus.cancelled)
+        update_booking_status(db, booking, BookingStatus.cancelled, "Patient request")
         db.commit()
         assert db.query(BookingSlotLock).filter(BookingSlotLock.booking_id == booking.id).count() == 0
 
@@ -215,7 +213,7 @@ def test_paginated_categories_response_has_envelope():
     with TestClient(app) as client:
         token = client.post(
             "/api/auth/login",
-            json={"email": "admin@royaldutch.ae", "password": "Admin@12345"},
+            json={"email": "manager@royaldutch.ae", "password": "Manager@12345"},
         ).json()["access_token"]
         response = client.get("/api/patients?page=1&limit=2", headers={"Authorization": f"Bearer {token}"})
 
@@ -231,7 +229,7 @@ def test_settings_update_creates_audit_log():
     with TestClient(app) as client:
         token = client.post(
             "/api/auth/login",
-            json={"email": "admin@royaldutch.ae", "password": "Admin@12345"},
+            json={"email": "manager@royaldutch.ae", "password": "Manager@12345"},
         ).json()["access_token"]
         response = client.patch(
             "/api/settings",
@@ -281,7 +279,7 @@ def test_audit_logs_are_super_admin_only():
     with TestClient(app) as client:
         admin_token = client.post(
             "/api/auth/login",
-            json={"email": "admin@royaldutch.ae", "password": "Admin@12345"},
+            json={"email": "manager@royaldutch.ae", "password": "Manager@12345"},
         ).json()["access_token"]
         denied = client.get("/api/audit-logs", headers={"Authorization": f"Bearer {admin_token}"})
         assert denied.status_code == 403
@@ -289,13 +287,13 @@ def test_audit_logs_are_super_admin_only():
         from app.db.session import SessionLocal
 
         with SessionLocal() as db:
-            admin = db.query(User).filter(User.email == "admin@royaldutch.ae").one()
+            admin = db.query(User).filter(User.email == "manager@royaldutch.ae").one()
             admin.role = UserRole.super_admin
             db.commit()
 
         super_token = client.post(
             "/api/auth/login",
-            json={"email": "admin@royaldutch.ae", "password": "Admin@12345"},
+            json={"email": "manager@royaldutch.ae", "password": "Manager@12345"},
         ).json()["access_token"]
         allowed = client.get("/api/audit-logs", headers={"Authorization": f"Bearer {super_token}"})
         assert allowed.status_code == 200, allowed.text

@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI):
             seed_database(db)
             seed_default_email_templates(db)
 
-    if settings.app_env != "production" or settings.enable_in_process_worker:
+    if settings.enable_in_process_worker and settings.mail_enabled:
         mail_worker_task = asyncio.create_task(process_mail_queue())
 
     try:
@@ -65,6 +65,16 @@ def create_app() -> FastAPI:
     if settings.trusted_host_list:
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_host_list)
     app.include_router(api_router, prefix=settings.api_v1_prefix)
+
+    @app.get("/", include_in_schema=False)
+    def root() -> dict:
+        """Provide a useful response when the API base URL is opened in a browser."""
+        return {
+            "status": "ok",
+            "service": settings.app_name,
+            "docs": "/docs",
+            "health": "/health",
+        }
 
     @app.get("/health")
     def health() -> dict:

@@ -150,7 +150,13 @@ def seed_categories_and_services(db: Session) -> list[Service]:
     return services
 
 
-STAFF_PROFILES: list[dict] = []
+STAFF_PROFILES: list[dict] = [
+    {"name": "Dr. Aisha Rahman", "email": "aisha.rahman@royaldutch.ae", "phone": "+971500000101", "role": "doctor", "specialization": "Dermatology and aesthetic medicine", "service_slugs": ["medical-dermatology", "cosmetic-injectables", "laser-device-based-treatments", "anti-aging-preventive-skin-programs"]},
+    {"name": "Dr. Omar Khalid", "email": "omar.khalid@royaldutch.ae", "phone": "+971500000102", "role": "dentist", "specialization": "General and restorative dentistry", "service_slugs": ["preventive-general-dentistry", "cosmetic-smile-design-rehabilitation", "restorative-dentistry", "pediatric-dentistry"]},
+    {"name": "Dr. Maya Nair", "email": "maya.nair@royaldutch.ae", "phone": "+971500000103", "role": "doctor", "specialization": "General medicine", "service_slugs": ["diagnosis-treatment-acute-conditions", "chronic-disease-management", "preventive-health-screenings-checkups", "family-medicine-wellness-care"]},
+    {"name": "Sara Ahmed", "email": "sara.ahmed@royaldutch.ae", "phone": "+971500000104", "role": "physiotherapist", "specialization": "Physiotherapy and rehabilitation", "service_slugs": ["musculoskeletal-pain-management", "post-injury-post-operative-rehabilitation", "neurological-physiotherapy", "home-based-physiotherapy-programs"]},
+    {"name": "Fatima Noor", "email": "fatima.noor@royaldutch.ae", "phone": "+971500000105", "role": "nurse", "specialization": "Home healthcare and post-surgical care", "service_slugs": ["doctor-home-consultations", "skilled-nursing-care", "elderly-assisted-care-services", "chronic-condition-monitoring", "wound-care-infection-prevention", "pain-management-protocols", "rehabilitation-mobility-restoration", "long-term-recovery-follow-up-care"]},
+]
 
 
 def seed_staff(db: Session, services: list[Service]) -> None:

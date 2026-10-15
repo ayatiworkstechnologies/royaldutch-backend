@@ -116,9 +116,13 @@ def sender_header() -> str:
 
 def send_mail_message(mail: MailMessage, attachments: list[tuple[str, bytes, str]] | None = None) -> MailMessage:
     settings = get_settings()
+    if not settings.mail_enabled:
+        mail.status = MailStatus.failed
+        mail.error_message = "Mail delivery is disabled"
+        return mail
     if not settings.mail_from:
         mail.status = MailStatus.failed
-        mail.error_message = "From email is missing"
+        mail.error_message = "SMTP host or from email is missing"
         return mail
 
     to_emails = split_emails(mail.recipient_email)
@@ -197,7 +201,7 @@ def _send_via_smtp(
     settings = get_settings()
     if not settings.smtp_host:
         mail.status = MailStatus.failed
-        mail.error_message = "SMTP host is missing"
+        mail.error_message = "SMTP host or from email is missing"
         return mail
 
     message = EmailMessage()

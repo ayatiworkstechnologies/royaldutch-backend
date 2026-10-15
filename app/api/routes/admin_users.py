@@ -24,6 +24,8 @@ def list_admin_users(db: DbSession, page: int | None = Query(default=None), limi
 
 @router.post("", response_model=AdminUserRead)
 def create_user(data: AdminUserCreate, db: DbSession, request: Request, current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role == UserRole.admin and data.role == UserRole.super_admin:
+        raise HTTPException(status_code=403, detail="Managers cannot create super-admin users")
     user = create_admin_user(db, data)
     write_audit_log(db, action="admin_user.create", entity_type="User", entity_id=user.id, user=current_user, request=request, new_value=model_snapshot(user))
     db.commit()
@@ -35,6 +37,8 @@ def patch_user(user_id: int, data: AdminUserUpdate, db: DbSession, request: Requ
     user = db.get(User, user_id)
     if not user or user.role == UserRole.customer:
         raise HTTPException(status_code=404, detail="Admin user not found")
+    if current_user.role == UserRole.admin and (user.role == UserRole.super_admin or data.role == UserRole.super_admin):
+        raise HTTPException(status_code=403, detail="Managers cannot modify super-admin users")
     old_value = model_snapshot(user)
     user = update_admin_user(db, user, data)
     write_audit_log(db, action="admin_user.update", entity_type="User", entity_id=user.id, user=current_user, request=request, old_value=old_value, new_value=model_snapshot(user))
