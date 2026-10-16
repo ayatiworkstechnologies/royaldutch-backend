@@ -10,6 +10,7 @@ from app.schemas.patient import PatientCreate, PatientRead
 
 class BookingCreate(ORMModel):
     service_id: int
+    offer_package_id: int | None = None
     sub_service_ids: list[int] = Field(default_factory=list, max_length=100)
     package_ids: list[int] = Field(default_factory=list, max_length=100)
     staff_id: int | None = None
@@ -55,6 +56,7 @@ class BookingRead(Timestamped):
     booking_code: str
     patient_id: int
     service_id: int
+    offer_package_id: int | None
     staff_id: int | None
     booking_date: date
     booking_time: time
@@ -70,4 +72,5 @@ class BookingRead(Timestamped):
 class BookingDetail(BookingRead):
     patient: PatientRead
     service_name: str | None = None
+    offer_package_title: str | None = None
     staff_name: str | None = None

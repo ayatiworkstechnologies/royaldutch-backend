@@ -18,6 +18,7 @@ from app.models.payment import Payment
 from app.models.service import Service
 from app.models.sub_service import SubService
 from app.models.service_package import ServicePackage
+from app.models.offer_package import OfferPackage
 from app.models.staff import Staff, StaffAvailability
 from app.models.user import User
 from app.schemas.booking import BookingCreate, BookingUpdate
@@ -311,6 +312,18 @@ def create_booking(db: Session, data: BookingCreate) -> Booking:
     if not service or service.status != RecordStatus.active:
         raise HTTPException(status_code=404, detail="Service not found or inactive")
 
+    offer_package = None
+    if data.offer_package_id is not None:
+        offer_package = db.get(OfferPackage, data.offer_package_id)
+        if not offer_package or offer_package.status != RecordStatus.active:
+            raise HTTPException(status_code=404, detail="Offer package not found or inactive")
+        if offer_package.service_id != service.id:
+            raise HTTPException(status_code=422, detail="Offer package does not belong to the selected service")
+        if offer_package.currency != service.currency:
+            raise HTTPException(status_code=422, detail="Offer package currency does not match the selected service")
+        if data.sub_service_ids or data.package_ids:
+            raise HTTPException(status_code=422, detail="Offer package bookings cannot include additional packages or upgrades")
+
     upgrade_ids = set(data.sub_service_ids)
     upgrades = list(db.scalars(select(SubService).where(
         SubService.id.in_(upgrade_ids),
@@ -343,12 +356,20 @@ def create_booking(db: Session, data: BookingCreate) -> Booking:
 
     upgrade_prices = [exact_upgrade_price(item) for item in upgrades]
     package_prices = [exact_upgrade_price(item) for item in packages]
-    price = (
+    price = offer_package.offer_price if offer_package else (
         None
         if any(item_price is None for item_price in [*upgrade_prices, *package_prices])
         else sum((item_price for item_price in [*upgrade_prices, *package_prices] if item_price is not None), Decimal("0"))
     )
     notes = data.notes
+    if offer_package:
+        snapshot = (
+            f"Offer package: {offer_package.title} (#{offer_package.id})\n"
+            f"Original price: {offer_package.currency} {offer_package.original_price}\n"
+            f"Offer price: {offer_package.currency} {offer_package.offer_price}\n"
+            f"Discount: {offer_package.discount_percentage}%"
+        )
+        notes = "\n\n".join(part for part in (notes, snapshot) if part)
     if upgrades:
         snapshot = "Booking upgrades:\n" + "\n".join(
             f"- {item.name} (#{item.id}): {item.currency} {item.price}" if item.price is not None
@@ -381,6 +402,7 @@ def create_booking(db: Session, data: BookingCreate) -> Booking:
             booking_code=make_booking_code(db, data.booking_date),
             patient_id=patient.id,
             service_id=service.id,
+            offer_package_id=offer_package.id if offer_package else None,
             staff_id=staff.id if staff else None,
             booking_date=data.booking_date,
             booking_time=data.booking_time,

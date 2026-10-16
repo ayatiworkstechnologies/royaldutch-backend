@@ -22,6 +22,7 @@ router = APIRouter(prefix="/bookings", tags=["bookings"])
 def to_booking_detail(booking: Booking) -> BookingDetail:
     detail = BookingDetail.model_validate(booking)
     detail.service_name = booking.service.name if booking.service else None
+    detail.offer_package_title = booking.offer_package.title if booking.offer_package else None
     detail.staff_name = booking.staff.name if booking.staff else None
     return detail
 

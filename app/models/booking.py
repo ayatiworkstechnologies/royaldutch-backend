@@ -17,6 +17,7 @@ class Booking(TimestampMixin, Base):
     booking_code: Mapped[str] = mapped_column(String(30), unique=True, index=True, nullable=False)
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), nullable=False, index=True)
     service_id: Mapped[int] = mapped_column(ForeignKey("services.id"), nullable=False, index=True)
+    offer_package_id: Mapped[int | None] = mapped_column(ForeignKey("offer_packages.id"), nullable=True, index=True)
     staff_id: Mapped[int | None] = mapped_column(ForeignKey("staff.id"), nullable=True, index=True)
     booking_date: Mapped[date] = mapped_column(nullable=False, index=True)
     booking_time: Mapped[time] = mapped_column(nullable=False)
@@ -35,6 +36,7 @@ class Booking(TimestampMixin, Base):
 
     patient = relationship("Patient", back_populates="bookings")
     service = relationship("Service", back_populates="bookings")
+    offer_package = relationship("OfferPackage", back_populates="bookings")
     staff = relationship("Staff", back_populates="bookings")
     payments = relationship("Payment", back_populates="booking", cascade="all, delete-orphan")
     prescriptions = relationship("Prescription", back_populates="booking", cascade="all, delete-orphan")

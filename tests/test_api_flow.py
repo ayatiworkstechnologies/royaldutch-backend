@@ -176,6 +176,26 @@ def test_backend_api_end_to_end_flow():
         assert_ok(client.get("/api/services"))
         assert_ok(client.get(f"/api/services/{service['slug']}"))
 
+        offer = assert_ok(
+            client.post(
+                "/api/admin/offer-packages",
+                headers=headers,
+                json={
+                    "service_id": service["id"],
+                    "title": "API Flow Special Offer",
+                    "description": "Bookable homepage offer",
+                    "image_url": "/images/test-offer.png",
+                    "original_price": "1000.00",
+                    "offer_price": "600.00",
+                    "currency": "AED",
+                    "status": "active",
+                },
+            ),
+            201,
+        )
+        assert offer["discount_percentage"] == 40
+        assert assert_ok(client.get("/api/offer-packages"))[0]["id"] == offer["id"]
+
         monday = next_monday()
         staff = assert_ok(
             client.post(
@@ -231,6 +251,26 @@ def test_backend_api_end_to_end_flow():
             )
         )
         assert booking["status"] == "pending"
+
+        offer_booking = assert_ok(
+            client.post(
+                "/api/bookings",
+                json={
+                    "service_id": service["id"],
+                    "offer_package_id": offer["id"],
+                    "staff_id": staff["id"],
+                    "booking_date": monday.isoformat(),
+                    "booking_time": "10:00",
+                    "patient": {
+                        "full_name": "Offer Patient",
+                        "email": "offer-patient@example.com",
+                        "phone": "+971500000003",
+                    },
+                },
+            )
+        )
+        assert offer_booking["offer_package_id"] == offer["id"]
+        assert offer_booking["price"] == "600.00"
 
         assert_ok(client.get("/api/bookings", headers=headers))
         assert_ok(client.get(f"/api/bookings/{booking['id']}", headers=headers))

@@ -32,6 +32,7 @@ htmlcov/
 *.log
 logs/
 patient_documents/
+offer_package_images/
 
 # Python packaging & builds
 build/

@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     enable_in_process_worker: bool = False
     mail_enabled: bool = False
     redis_url: str = ""
+    offer_package_image_storage_dir: str = "offer_package_images"
     whatsapp_provider: str = "noop"
     whatsapp_api_url: str = ""
     whatsapp_api_token: str = ""

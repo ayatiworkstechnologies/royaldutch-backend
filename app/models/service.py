@@ -29,6 +29,7 @@ class Service(TimestampMixin, Base):
     staff = relationship("Staff", secondary="staff_services", back_populates="services")
     bookings = relationship("Booking", back_populates="service")
     sub_services = relationship("SubService", back_populates="service", cascade="all, delete-orphan")
+    offer_packages = relationship("OfferPackage", back_populates="service")
 
     @property
     def category_name(self) -> str | None:
