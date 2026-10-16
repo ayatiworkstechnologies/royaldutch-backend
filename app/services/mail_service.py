@@ -10,6 +10,16 @@ from app.services.email_template_service import (
     payment_context,
     render_email_template,
 )
+from app.services.smtp_service import send_mail_message
+
+
+def send_and_record(db, mail: MailMessage | None) -> dict[str, str | bool]:
+    """Attempt a transactional email immediately and retain its audit record."""
+    if mail is None:
+        return {"email_triggered": False, "email_status": "not_triggered"}
+    send_mail_message(mail)
+    db.add(mail)
+    return {"email_triggered": True, "email_status": mail.status.value}
 
 
 def patient_email(booking: Booking) -> str | None:

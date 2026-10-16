@@ -67,6 +67,9 @@ class BookingRead(Timestamped):
     notes: str | None
     status_reason: str | None
     first_visit: bool
+    email_triggered: bool = False
+    customer_email_status: str = "not_triggered"
+    management_email_status: str = "not_triggered"
 
 
 class BookingDetail(BookingRead):

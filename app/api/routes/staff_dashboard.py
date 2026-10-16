@@ -16,7 +16,7 @@ from app.schemas.patient import PatientRead
 from app.schemas.patient_detail import PatientDetail
 from app.schemas.prescription import PrescriptionCreate, PrescriptionRead
 from app.services.booking_service import update_booking_status as set_booking_status
-from app.services.mail_service import create_booking_mail, template_for_status
+from app.services.mail_service import create_booking_mail, send_and_record, template_for_status
 from app.services.patient_service import ensure_staff_treats_patient, get_patient_detail, list_patients_for_staff
 from app.services.prescription_service import create_prescription, list_prescriptions_for_booking
 
@@ -83,9 +83,9 @@ def update_my_booking_status(
     set_booking_status(db, booking, data.status, data.reason, data.notes)
     template = template_for_status(data.status)
     if template:
-        mail = create_booking_mail(booking, template, db=db)
-        if mail:
-            db.add(mail)
+        delivery = send_and_record(db, create_booking_mail(booking, template, db=db))
+        booking.email_triggered = bool(delivery["email_triggered"])
+        booking.customer_email_status = str(delivery["email_status"])
     db.commit()
     db.refresh(booking)
     return booking

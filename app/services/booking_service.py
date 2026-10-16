@@ -22,7 +22,6 @@ from app.models.offer_package import OfferPackage
 from app.models.staff import Staff, StaffAvailability
 from app.models.user import User
 from app.schemas.booking import BookingCreate, BookingUpdate
-from app.services.mail_service import create_booking_mail
 
 BLOCKING_STATUSES = {
     BookingStatus.pending,
@@ -433,9 +432,6 @@ def create_booking(db: Session, data: BookingCreate) -> Booking:
                     message=f"New booking request {booking.booking_code} received.",
                 )
             )
-            mail = create_booking_mail(booking, "created")
-            if mail:
-                db.add(mail)
             db.commit()
             db.refresh(booking)
             return booking

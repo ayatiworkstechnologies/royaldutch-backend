@@ -35,8 +35,10 @@ def create_contact(data: ContactCreate, db: DbSession) -> ContactRead:
     db.add(contact)
     db.commit()
     db.refresh(contact)
-    send_contact_alerts(contact, db)
+    delivery = send_contact_alerts(contact, db)
     db.commit()
+    for field, value in delivery.items():
+        setattr(contact, field, value)
     return contact
 
 

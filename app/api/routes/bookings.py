@@ -10,7 +10,7 @@ from app.models.booking import Booking
 from app.models.enums import BookingStatus, MailStatus
 from app.schemas.booking import BookingCreate, BookingDetail, BookingRead, BookingStatusUpdate, BookingUpdate
 from app.services.booking_service import available_slots, available_slots_range, create_booking, update_booking, update_booking_status as set_booking_status
-from app.services.mail_service import create_booking_mail, template_for_status
+from app.services.mail_service import create_booking_mail, send_and_record, template_for_status
 from app.services.management_alert_service import send_booking_alerts
 from app.services.audit_service import model_snapshot, write_audit_log
 from app.models.user import User
@@ -32,8 +32,12 @@ def create_patient_booking(data: BookingCreate, db: DbSession, request: Request)
     booking = create_booking(db, data)
     write_audit_log(db, action="booking.create", entity_type="Booking", entity_id=booking.id, request=request, new_value=model_snapshot(booking))
     db.commit()
-    send_booking_alerts(booking, db)
+    customer_delivery = send_and_record(db, create_booking_mail(booking, "created", db=db))
+    management_delivery = send_booking_alerts(booking, db)
     db.commit()
+    booking.email_triggered = bool(customer_delivery["email_triggered"] or management_delivery["email_triggered"])
+    booking.customer_email_status = str(customer_delivery["email_status"])
+    booking.management_email_status = str(management_delivery["email_status"])
     return booking
 
 
@@ -161,9 +165,9 @@ def update_booking_status(booking_id: int, data: BookingStatusUpdate, db: DbSess
     set_booking_status(db, booking, data.status, data.reason, data.notes)
     template = template_for_status(data.status)
     if template:
-        mail = create_booking_mail(booking, template, db=db)
-        if mail:
-            db.add(mail)
+        delivery = send_and_record(db, create_booking_mail(booking, template, db=db))
+        booking.email_triggered = bool(delivery["email_triggered"])
+        booking.customer_email_status = str(delivery["email_status"])
     db.commit()
     db.refresh(booking)
     action = f"booking.{data.status}"
@@ -187,6 +191,12 @@ def queue_booking_mail(booking_id: int, template: str, db: DbSession) -> dict:
     mail = create_booking_mail(booking, template, MailStatus.queued, db=db)
     if not mail:
         raise HTTPException(status_code=400, detail="Patient email is missing")
-    db.add(mail)
+    delivery = send_and_record(db, mail)
     db.commit()
-    return {"message": "Mail queued", "template": template}
+    return {
+        "message": "Booking email processed",
+        "template": template,
+        "email_triggered": delivery["email_triggered"],
+        "email_status": delivery["email_status"],
+        "error_message": mail.error_message,
+    }

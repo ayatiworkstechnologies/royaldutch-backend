@@ -12,7 +12,7 @@ from app.schemas.billing import InvoiceCreate, InvoiceFromBookingCreate, Invoice
 from app.services.billing_service import create_invoice_from_booking_with_retry, create_invoice_with_retry, update_invoice_values
 from app.services.audit_service import model_snapshot, write_audit_log
 from app.services.invoice_pdf_service import generate_invoice_pdf, invoice_pdf_filename
-from app.services.mail_service import create_invoice_mail
+from app.services.mail_service import create_invoice_mail, send_and_record
 from app.services.settings_service import get_clinic_settings
 from app.services.smtp_service import send_mail_message
 from app.utils.pagination import paginate_query
@@ -111,9 +111,15 @@ def queue_invoice_mail(invoice_id: int, template: str, db: DbSession) -> dict:
     mail = create_invoice_mail(invoice, template, MailStatus.queued, db=db)
     if not mail:
         raise HTTPException(status_code=400, detail="Patient email is missing")
-    db.add(mail)
+    delivery = send_and_record(db, mail)
     db.commit()
-    return {"message": "Invoice mail queued", "template": template}
+    return {
+        "message": "Invoice email processed",
+        "template": template,
+        "email_triggered": delivery["email_triggered"],
+        "email_status": delivery["email_status"],
+        "error_message": mail.error_message,
+    }
 
 
 @router.get("/{invoice_id}/pdf")
@@ -151,4 +157,10 @@ def send_invoice_email(invoice_id: int, db: DbSession, request: Request, attach_
     db.add(mail)
     write_audit_log(db, action="invoice.send", entity_type="Invoice", entity_id=invoice.id, user=user, request=request, new_value={"mail_status": mail.status, "attach_pdf": attach_pdf})
     db.commit()
-    return {"message": "Invoice email processed", "status": mail.status, "error_message": mail.error_message}
+    return {
+        "message": "Invoice email processed",
+        "email_triggered": True,
+        "status": mail.status,
+        "email_status": mail.status,
+        "error_message": mail.error_message,
+    }

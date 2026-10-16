@@ -91,11 +91,11 @@ def _send(mail: MailMessage, db: Session) -> None:
 
 # ── public API ────────────────────────────────────────────────────────────────
 
-def send_booking_alerts(booking: Booking, db: Session) -> None:
+def send_booking_alerts(booking: Booking, db: Session) -> dict[str, str | bool]:
     """Send management alert for a new booking (fire-and-save, no queue needed)."""
     clinic_email, cc, bcc, clinic_name = _clinic_cfg(db)
     if not clinic_email:
-        return
+        return {"email_triggered": False, "email_status": "not_configured"}
 
     service_name  = booking.service.name       if booking.service  else "—"
     staff_name    = booking.staff.name         if booking.staff    else "—"
@@ -131,11 +131,17 @@ def send_booking_alerts(booking: Booking, db: Session) -> None:
         alert.status = MailStatus.failed
         alert.error_message = str(exc)
         db.add(alert)
+    return {"email_triggered": True, "email_status": alert.status.value}
 
 
-def send_contact_alerts(contact: Contact, db: Session) -> None:
+def send_contact_alerts(contact: Contact, db: Session) -> dict[str, str | bool]:
     """Send management alert + customer thank-you for a new contact enquiry."""
     clinic_email, cc, bcc, clinic_name = _clinic_cfg(db)
+    result: dict[str, str | bool] = {
+        "email_triggered": False,
+        "management_email_status": "not_configured",
+        "customer_email_status": "not_triggered",
+    }
 
     # 1. Management alert
     if clinic_email:
@@ -161,6 +167,8 @@ def send_contact_alerts(contact: Contact, db: Session) -> None:
             alert.status = MailStatus.failed
             alert.error_message = str(exc)
             db.add(alert)
+        result["email_triggered"] = True
+        result["management_email_status"] = alert.status.value
 
     # 2. Customer thank-you (only if they gave their email)
     if contact.email:
@@ -177,3 +185,7 @@ def send_contact_alerts(contact: Contact, db: Session) -> None:
             thanks.status = MailStatus.failed
             thanks.error_message = str(exc)
             db.add(thanks)
+        result["email_triggered"] = True
+        result["customer_email_status"] = thanks.status.value
+
+    return result

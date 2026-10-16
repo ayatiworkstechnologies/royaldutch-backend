@@ -28,3 +28,5 @@ class PaymentUpdate(ORMModel):
 
 class PaymentRead(PaymentCreate, Timestamped):
     id: int
+    email_triggered: bool = False
+    email_status: str = "not_triggered"

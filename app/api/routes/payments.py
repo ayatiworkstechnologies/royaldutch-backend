@@ -10,7 +10,7 @@ from app.models.enums import MailStatus, PaymentStatus
 from app.models.payment import Payment
 from app.models.user import User
 from app.schemas.payment import PaymentCreate, PaymentRead, PaymentUpdate
-from app.services.mail_service import create_payment_mail
+from app.services.mail_service import create_payment_mail, send_and_record
 from app.services.payment_service import COUNTED_PAYMENT_STATUSES, sync_invoice_paid_amount
 from app.services.audit_service import model_snapshot, write_audit_log
 from app.utils.pagination import paginate_query
@@ -59,9 +59,9 @@ def create_payment(data: PaymentCreate, db: DbSession, request: Request, user: U
     db.flush()
     sync_invoice_paid_amount(db, payment.invoice_id)
     if payment.payment_status in COUNTED_PAYMENT_STATUSES:
-        mail = create_payment_mail(payment, "payment_received", MailStatus.queued, db=db)
-        if mail:
-            db.add(mail)
+        delivery = send_and_record(db, create_payment_mail(payment, "payment_received", MailStatus.queued, db=db))
+        payment.email_triggered = bool(delivery["email_triggered"])
+        payment.email_status = str(delivery["email_status"])
     db.commit()
     db.refresh(payment)
     write_audit_log(db, action="payment.create", entity_type="Payment", entity_id=payment.id, user=user, request=request, new_value=model_snapshot(payment))
@@ -85,9 +85,9 @@ def update_payment(payment_id: int, data: PaymentUpdate, db: DbSession, request:
     if payment.invoice_id != old_invoice_id:
         sync_invoice_paid_amount(db, payment.invoice_id)
     if payment.payment_status in COUNTED_PAYMENT_STATUSES and old_status not in COUNTED_PAYMENT_STATUSES:
-        mail = create_payment_mail(payment, "payment_received", MailStatus.queued, db=db)
-        if mail:
-            db.add(mail)
+        delivery = send_and_record(db, create_payment_mail(payment, "payment_received", MailStatus.queued, db=db))
+        payment.email_triggered = bool(delivery["email_triggered"])
+        payment.email_status = str(delivery["email_status"])
     db.commit()
     db.refresh(payment)
     write_audit_log(db, action="payment.update", entity_type="Payment", entity_id=payment.id, user=user, request=request, old_value=old_value, new_value=model_snapshot(payment))
@@ -106,9 +106,15 @@ def queue_payment_mail(payment_id: int, template: str, db: DbSession) -> dict:
     mail = create_payment_mail(payment, template, MailStatus.queued, db=db)
     if not mail:
         raise HTTPException(status_code=400, detail="Patient email is missing")
-    db.add(mail)
+    delivery = send_and_record(db, mail)
     db.commit()
-    return {"message": "Payment mail queued", "template": template}
+    return {
+        "message": "Payment email processed",
+        "template": template,
+        "email_triggered": delivery["email_triggered"],
+        "email_status": delivery["email_status"],
+        "error_message": mail.error_message,
+    }
 
 
 @router.delete("/{payment_id}")
