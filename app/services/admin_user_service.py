@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
 from app.models.enums import UserRole
+from app.models.patient import Patient
 from app.models.user import User
 from app.schemas.admin_user import AdminUserCreate, AdminUserUpdate
 
@@ -23,7 +24,28 @@ def validate_admin_role(role: str) -> None:
 def create_admin_user(db: Session, data: AdminUserCreate) -> User:
     email = data.email.lower().strip()
     validate_admin_role(data.role)
-    if db.scalar(select(User).where(User.email == email)):
+    existing_user = db.scalar(select(User).where(User.email == email))
+    if existing_user:
+        archived_patient = db.scalar(
+            select(Patient).where(Patient.user_id == existing_user.id, Patient.is_active.is_(False))
+        )
+        active_patient = db.scalar(
+            select(Patient).where(Patient.user_id == existing_user.id, Patient.is_active.is_(True))
+        )
+
+        # A patient deleted from the admin list is archived, not hard-deleted,
+        # so its customer account remains for data integrity. Reuse that
+        # account when an administrator intentionally creates staff with the
+        # same email; do not take over an active patient's account.
+        if existing_user.role == UserRole.customer and archived_patient and not active_patient:
+            existing_user.name = data.name.strip()
+            existing_user.hashed_password = hash_password(data.password) if data.password else None
+            existing_user.role = data.role
+            existing_user.is_active = data.is_active
+            db.commit()
+            db.refresh(existing_user)
+            return existing_user
+
         raise HTTPException(status_code=400, detail="User with this email already exists")
     user = User(
         name=data.name.strip(),

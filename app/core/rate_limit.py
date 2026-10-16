@@ -49,6 +49,29 @@ def rate_limit(key: str, limit: int, window_seconds: int) -> None:
     bucket.append(now)
 
 
+def is_rate_limited(key: str, limit: int, window_seconds: int) -> bool:
+    """Return whether a key has already exhausted its request allowance.
+
+    This is used by password login so valid sign-ins are not themselves
+    counted as failed attempts. Other endpoints can keep using ``rate_limit``
+    when every request should be counted.
+    """
+    settings = get_settings()
+    if settings.redis_url:
+        try:
+            redis = redis_client(settings.redis_url)
+            return int(redis.get(f"rate-limit:{key}") or 0) >= limit
+        except Exception:
+            if settings.app_env == "production":
+                raise HTTPException(status_code=503, detail="Rate limiter is unavailable")
+
+    now = monotonic()
+    bucket = _buckets[key]
+    while bucket and now - bucket[0] >= window_seconds:
+        bucket.popleft()
+    return len(bucket) >= limit
+
+
 def clear_rate_limits() -> None:
     _buckets.clear()
 

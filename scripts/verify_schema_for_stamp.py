@@ -17,7 +17,7 @@ REQUIRED_COLUMNS = {
     "categories": {"id", "external_id", "name", "slug", "description", "status", "created_at", "updated_at"},
     "clinic_settings": {"id", "key", "value", "created_at", "updated_at"},
     "email_templates": {"id", "name", "slug", "description", "subject", "body", "status", "created_at", "updated_at"},
-    "patients": {"id", "full_name", "email", "phone", "gender", "age", "notes", "documents", "user_id", "created_at", "updated_at"},
+    "patients": {"id", "full_name", "email", "phone", "is_active", "gender", "age", "notes", "documents", "user_id", "created_at", "updated_at"},
     "services": {"id", "display_id", "external_id", "category_id", "name", "slug", "description", "currency", "image", "status", "created_at", "updated_at"},
     "staff": {"id", "name", "email", "phone", "role", "specialization", "profile_image", "status", "created_at", "updated_at"},
     "staff_services": {"id", "staff_id", "service_id"},

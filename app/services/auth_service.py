@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.rate_limit import client_ip, rate_limit
+from app.core.rate_limit import client_ip, is_rate_limited, rate_limit
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.auth_otp import AuthOtp
 from app.models.enums import MailStatus, UserRole
@@ -105,10 +105,19 @@ def link_patient_by_email(db: Session, user: User) -> None:
 
 def login_with_password(db: Session, data: LoginRequest, request: Request) -> TokenResponse:
     email = data.email.lower().strip()
-    rate_limit(f"login:ip:{client_ip(request)}", 5, 15 * 60)
-    rate_limit(f"login:email:{email}", 5, 15 * 60)
+    ip_key = f"login:ip:{client_ip(request)}"
+    email_key = f"login:email:{email}"
+    if is_rate_limited(ip_key, 5, 15 * 60) or is_rate_limited(email_key, 5, 15 * 60):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed login attempts. Please try again later.",
+        )
     user = db.scalar(select(User).where(User.email == email))
     if not user or not user.hashed_password or not verify_password(data.password, user.hashed_password):
+        # Count only rejected credentials. Previously every successful login
+        # consumed an attempt and could lock a legitimate dashboard user out.
+        rate_limit(ip_key, 5, 15 * 60)
+        rate_limit(email_key, 5, 15 * 60)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is inactive")

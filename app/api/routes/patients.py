@@ -21,7 +21,7 @@ def list_patients(
     page: int | None = Query(default=None),
     limit: int | None = Query(default=None),
 ):
-    query = select(Patient).order_by(Patient.full_name)
+    query = select(Patient).where(Patient.is_active.is_(True)).order_by(Patient.full_name)
     if phone:
         query = query.where(Patient.phone == phone)
     if page is not None and limit is not None:
@@ -69,7 +69,7 @@ def delete_patient(patient_id: int, db: DbSession, request: Request, user: User 
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
     old_value = model_snapshot(patient)
-    db.delete(patient)
+    patient.is_active = False
     write_audit_log(db, action="patient.delete", entity_type="Patient", entity_id=patient_id, user=user, request=request, old_value=old_value)
     db.commit()
-    return {"message": "Patient deleted"}
+    return {"message": "Patient archived and removed from the active list"}

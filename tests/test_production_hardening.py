@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 from app.core.config import get_settings
 from app.core.permissions import has_permission
 from app.db.base import Base
-from app.db.session import engine
+from app.db.session import SessionLocal, engine
 from app.models.audit_log import AuditLog
 from app.models.billing import Invoice, InvoiceItem
 from app.models.booking import Booking, BookingSlotLock
@@ -31,7 +31,9 @@ from app.models.staff import Staff, StaffAvailability
 from app.models.user import User
 from app.services.mail_queue_service import MAX_MAIL_RETRIES, claim_queued_mail, process_claimed_mail
 from app.services.booking_service import validate_status_transition
-from app.core.security import create_access_token
+from app.services.admin_user_service import create_admin_user
+from app.schemas.admin_user import AdminUserCreate
+from app.core.security import create_access_token, hash_password
 from fastapi import HTTPException
 import pytest
 from datetime import date, time, timedelta
@@ -66,6 +68,46 @@ def test_login_rate_limit_applies():
         )
 
     assert limited.status_code == 429
+
+
+def test_archived_patient_customer_can_be_reused_as_system_user():
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+    with SessionLocal() as db:
+        customer = User(
+            name="Former Patient",
+            email="former.patient@example.com",
+            hashed_password=hash_password("Password123"),
+            role=UserRole.customer,
+            is_active=True,
+        )
+        db.add(customer)
+        db.flush()
+        db.add(
+            Patient(
+                full_name="Former Patient",
+                email=customer.email,
+                phone="0500000001",
+                user_id=customer.id,
+                is_active=False,
+            )
+        )
+        db.commit()
+
+        staff_user = create_admin_user(
+            db,
+            AdminUserCreate(
+                name="Clinic Manager",
+                email=customer.email,
+                password="NewPassword123",
+                role=UserRole.admin,
+            ),
+        )
+
+    assert staff_user.id == customer.id
+    assert staff_user.role == UserRole.admin
+    assert staff_user.name == "Clinic Manager"
 
 
 def test_mail_claim_moves_message_to_processing():

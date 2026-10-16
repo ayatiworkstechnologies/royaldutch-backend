@@ -1,4 +1,4 @@
-from sqlalchemy import String, ForeignKey
+from sqlalchemy import Boolean, String, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -12,6 +12,7 @@ class Patient(TimestampMixin, Base):
     full_name: Mapped[str] = mapped_column(String(180), nullable=False)
     email: Mapped[str | None] = mapped_column(String(180), index=True)
     phone: Mapped[str] = mapped_column(String(30), unique=True, index=True, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
     gender: Mapped[str | None] = mapped_column(String(30))
     age: Mapped[int | None] = mapped_column(nullable=True)
     notes: Mapped[str | None] = mapped_column(String(1000))
