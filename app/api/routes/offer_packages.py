@@ -3,13 +3,14 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 
 from app.api.deps import DbSession, get_current_user
 from app.core.permissions import require_permission
 from app.core.config import get_settings
 from app.models.enums import RecordStatus
+from app.models.booking import Booking
 from app.models.offer_package import OfferPackage
 from app.models.service import Service
 from app.models.user import User
@@ -138,7 +139,16 @@ def delete_offer(offer_id: int, db: DbSession, request: Request, user: User = De
     if not offer:
         raise HTTPException(status_code=404, detail="Offer package not found")
     old = model_snapshot(offer)
-    offer.status = RecordStatus.inactive
+    booking_count = db.scalar(
+        select(func.count()).select_from(Booking).where(Booking.offer_package_id == offer.id)
+    )
+    if booking_count:
+        # Preserve historical booking data but remove the offer from the public site.
+        offer.status = RecordStatus.inactive
+        message = "Offer package has bookings and was archived"
+    else:
+        db.delete(offer)
+        message = "Offer package deleted"
     write_audit_log(db, action="offer_package.delete", entity_type="OfferPackage", entity_id=offer.id, user=user, request=request, old_value=old, new_value=model_snapshot(offer))
     db.commit()
-    return {"message": "Offer package archived"}
+    return {"message": message}
